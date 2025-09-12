@@ -6,7 +6,7 @@
 *.xlsx
 
 # EDA .ipynb files
-*.ipynb
+# *.ipynb
 
 # Virtual environment(개인 가상환경 추적 해제 시 추가)
 .edavenv/
