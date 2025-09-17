@@ -1,4 +1,6 @@
 from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
+#from langchain_huggingface import HuggingFaceEmbeddings 
 from langchain_community.vectorstores import FAISS
 from typing import List
 import os
@@ -7,7 +9,8 @@ from config import EMBEDDING_MODEL, VECTOR_DB_PATH
 
 class VectorDBQuery:
     def __init__(self, db_path: str, embedding_model_name: str):
-        self.embeddings = OpenAIEmbeddings(model=embedding_model_name)   
+        # self.embeddings = OpenAIEmbeddings(model=embedding_model_name)
+        self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
         self.db = FAISS.load_local(db_path, self.embeddings, allow_dangerous_deserialization=True)
         print(f"✅ Vector Store 불러오기 완료: {db_path}")
 
