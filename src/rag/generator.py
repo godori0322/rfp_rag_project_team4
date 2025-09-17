@@ -3,7 +3,7 @@ from typing import List
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from src.config import LLM_MODEL
+from config import LLM_MODEL
 
 class AnswerGenerator:
     def __init__(self):
