@@ -1,6 +1,6 @@
 import os
-from src.rag.retriever import DocumentRetriever
-from src.rag.generator import AnswerGenerator
+from rag.retriever import DocumentRetriever
+from rag.generator import AnswerGenerator
 
 class RAGPipeline:
     def __init__(self):

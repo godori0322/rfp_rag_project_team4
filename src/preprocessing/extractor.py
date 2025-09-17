@@ -2,7 +2,7 @@ import os
 import glob
 import pdfplumber
 import win32com.client
-from src.config import DATA_PATH, PDF_PATH
+from config import DATA_PATH, PDF_PATH
 
 def extract_text_from_hwp(file_path: str) -> str:
     text = ""

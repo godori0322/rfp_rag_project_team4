@@ -1,8 +1,8 @@
 import os
 from typing import List
 
-from src.vectorstore.query_index import VectorDBQuery
-from src.config import VECTOR_DB_PATH, EMBEDDING_MODEL, TOP_K
+from vectorstore.query_index import VectorDBQuery
+from config import VECTOR_DB_PATH, EMBEDDING_MODEL, TOP_K
 
 class DocumentRetriever:
     def __init__(self):

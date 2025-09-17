@@ -3,7 +3,7 @@ from langchain_community.vectorstores import FAISS
 from typing import List
 import os
 
-from src.config import EMBEDDING_MODEL, VECTOR_DB_PATH
+from config import EMBEDDING_MODEL, VECTOR_DB_PATH
 
 class VectorDBQuery:
     def __init__(self, db_path: str, embedding_model_name: str):
