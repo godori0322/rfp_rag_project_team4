@@ -1,0 +1,31 @@
+# Windows 환경에서 freeze한 패키지 목록, 오류 있음
+# Linux/Mac 환경으로 통일 예정이므로 참고만 해 주세요.(수정 예정)
+
+# 필수 
+pywin32==306    # HWP 파일 처리 (win32com.client) 
+pdfplumber==0.11.4 # PDF 텍스트 추출 
+pytesseract==0.3.13  # OCR 
+Pillow==10.3.0 # OCR용 이미지 처리 
+
+# RAG 구성 
+langchain==0.2.14 
+langchain-community==0.2.10 
+langchain-core==0.2.36 
+langchain-openai
+openai==1.40.6 
+tiktoken==0.7.0 
+
+# 벡터 DB 
+faiss-cpu==1.8.0.post1 
+
+# 임베딩 & 모델 활용 
+transformers==4.44.2 
+torch==2.4.1 
+torchvision==0.19.1 
+torchaudio==2.4.1 
+
+# 유틸 
+numpy==1.26.4 
+pandas==2.2.2 
+scikit-learn==1.5.1
+dotenv==1.1.1
