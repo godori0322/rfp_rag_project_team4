@@ -2,7 +2,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from typing import List
 
-from src.config import OPENAI_API_KEY, EMBEDDING_MODEL, VECTOR_DB_PATH
+from config import OPENAI_API_KEY, EMBEDDING_MODEL, VECTOR_DB_PATH
 
 def build_and_save_index(docs: List[str], save_path: str = VECTOR_DB_PATH, embedding_model: str = EMBEDDING_MODEL):
     if OPENAI_API_KEY is None:

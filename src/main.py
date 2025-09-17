@@ -1,9 +1,9 @@
 import argparse
 import os
-from src.rag.retriever import DocumentRetriever
-from src.rag.generator import AnswerGenerator
+from rag.retriever import DocumentRetriever
+from rag.generator import AnswerGenerator
 
-from src.config import VECTOR_DB_PATH, EMBEDDING_MODEL, LLM_MODEL, TOP_K
+from config import VECTOR_DB_PATH, EMBEDDING_MODEL, LLM_MODEL, TOP_K
 
 class RAGPipeline:
     def __init__(self):
