@@ -10,7 +10,7 @@ def build_and_save_index(docs: List[str], save_path: str = VECTOR_DB_PATH, embed
 
     embeddings = OpenAIEmbeddings(
         model=embedding_model,
-        openai_api_key=OPENAI_API_KEY 
+        openai_api_key=OPENAI_API_KEY
     )
 
     vector_store = FAISS.from_texts(docs, embeddings)

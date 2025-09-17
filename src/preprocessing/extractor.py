@@ -1,26 +1,8 @@
-import subprocess
 import os
-import shutil
 import glob
 import pdfplumber
 import win32com.client
 from src.config import DATA_PATH, PDF_PATH
-
-def hwp_to_pdf_libreoffice(hwp_path, output_dir):
-    print(hwp_path)
-    os.makedirs(output_dir, exist_ok=True)
-    cmd = [
-        "libreoffice",
-        "--headless",
-        "--convert-to", "pdf",
-        hwp_path,
-        "--outdir", output_dir
-    ]
-    try:
-        subprocess.run(cmd, check=True)
-        print(f"Converted {hwp_path} -> PDF")
-    except subprocess.CalledProcessError as e:
-        print(f"Conversion failed: {e}")
 
 def extract_text_from_hwp(file_path: str) -> str:
     text = ""
@@ -36,7 +18,7 @@ def extract_text_from_hwp(file_path: str) -> str:
     except Exception as e:
         print(f"Error extracting text from HWP with win32com: {e}")
     return text
-    
+
 def extract_text_from_pdf(file_path: str) -> str:
     text = ""
     try:
@@ -56,8 +38,6 @@ if __name__ == "__main__":
         base_name = os.path.basename(hwp_file)
         pdf_file_name = os.path.splitext(base_name)[0] + ".pdf"
         pdf_file_path = os.path.join(pdf_output_dir, pdf_file_name)
-
-        hwp_to_pdf_libreoffice(hwp_file, pdf_output_dir)
 
         if os.path.exists(pdf_file_path):
             text = extract_text_from_pdf(pdf_file_path)
