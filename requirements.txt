@@ -1,3 +1,6 @@
+# Windows 환경에서 freeze한 패키지 목록, 오류 있음
+# Linux/Mac 환경으로 통일 예정이므로 참고만 해 주세요.(수정 예정)
+
 # 필수 
 pywin32==306    # HWP 파일 처리 (win32com.client) 
 pdfplumber==0.11.4 # PDF 텍스트 추출 
