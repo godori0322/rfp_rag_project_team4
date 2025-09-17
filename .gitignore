@@ -8,8 +8,12 @@
 # EDA .ipynb files
 # *.ipynb
 
+# API Key
+*.env
+
 # Virtual environment(개인 가상환경 추적 해제 시 추가)
 .edavenv/
+.venv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
