@@ -10,7 +10,8 @@ VECTOR_DB_PATH = "src/vectorstore/vector_db"
 VECTOR_STORE_PATH = "src/vectorstore/faiss_index"
 
 # 모델 설정 (시나리오 B: OpenAI 기준)
-EMBEDDING_MODEL = "text-embedding-3-small"
+# EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
 LLM_MODEL = "gpt-4o-mini"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
