@@ -2,6 +2,7 @@ import argparse
 import os
 from rag.retriever import DocumentRetriever
 from rag.generator import AnswerGenerator
+from dotenv import load_dotenv, find_dotenv
 
 from config import VECTOR_DB_PATH, EMBEDDING_MODEL, LLM_MODEL, TOP_K
 
@@ -24,6 +25,8 @@ class RAGPipeline:
         print(answer)
 
 if __name__ == "__main__":
+    load_dotenv(find_dotenv())
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--query", type=str, required=True, help="질문을 입력하세요.")
     args = parser.parse_args()
