@@ -5,6 +5,9 @@
 *.xls
 *.xlsx
 
+# Vector DB files
+data/vectorstore/
+
 # EDA .ipynb files
 # *.ipynb
 
