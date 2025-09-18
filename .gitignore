@@ -14,6 +14,7 @@
 # Virtual environment(개인 가상환경 추적 해제 시 추가)
 .edavenv/
 .venv/
+.wslvenv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
