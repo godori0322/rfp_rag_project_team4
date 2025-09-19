@@ -1,9 +1,12 @@
 # CSV, HWP, PDF, Excel files
-*.csv
+# *.csv
 *.hwp
-*.pdf
+# *.pdf
 *.xls
 *.xlsx
+
+# Vector DB files
+data/vectorstore/
 
 # EDA .ipynb files
 # *.ipynb
@@ -14,6 +17,7 @@
 # Virtual environment(개인 가상환경 추적 해제 시 추가)
 .edavenv/
 .venv/
+.wslvenv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
