@@ -24,9 +24,9 @@ def create_chain(retriever, llm):
         return "\n\n".join(doc.page_content for doc in docs)
 
     prompt = ChatPromptTemplate.from_template("""
-        당신은 RFP(제안요청서) 분석 전문가입니다. 
-        주어진 문서를 바탕으로 사용자의 질문에 대해 한국어로 답변해주세요.
-        문서에 내용이 없으면 '문서에서 관련 정보를 찾을 수 없습니다.'라고 답변하세요.
+        당신은 주어진 컨텍스트를 기반으로 사용자의 질문에 답변하는 AI 어시턴트입니다.
+        컨텍스트의 내용을 최대한 활용하여 빠짐없이, 상세하게 답변해주세요. "제공된 정보만으로는 답변을 찾을 수 없습니다."라고 솔직하게 말하세요. 추측해서 답변하지 마세요.
+        반드시 한국어로 답변하세요.
         
         Context:
         {context}
@@ -42,6 +42,7 @@ def create_chain(retriever, llm):
     return chain
 
 if __name__ == "__main__":
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     load_dotenv(find_dotenv())
     
     parser = argparse.ArgumentParser()
@@ -51,5 +52,6 @@ if __name__ == "__main__":
     response = query(args.query)
     print("\n[최종 답변]")
     print(f"\n{response}")
+    
 
     # 실행 예시: python src/main.py --query "한국전력공사 RFP 문서의 주요 내용은 무엇인가요?"
