@@ -1,5 +1,5 @@
 # CSV, HWP, PDF, Excel files
-*.csv
+# *.csv
 *.hwp
 # *.pdf
 *.xls
