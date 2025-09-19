@@ -51,7 +51,7 @@ def load_documents():
 
 def chunk(filename: str, metadata, page_chunk_size: int = 1500, page_chunk_overlap: int = 150, final_chunk_size: int = 500, final_chunk_overlap: int = 100) -> List[Document]:
     """
-    1. TextSplitter를 이용해 페이지 단위로 텍스트를 1차 분할
+    1. CharacterTextSplitter를 이용해 페이지 단위로 텍스트를 1차 분할
     2. RecursiveCharacterTextSplitter를 이용해 1차 분할된 텍스트를 2차 분할
     """
     # PDF 파일에서 페이지 단위로 텍스트를 추출하는 함수
