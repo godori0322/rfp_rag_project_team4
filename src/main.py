@@ -43,15 +43,13 @@ def create_chain(retriever, llm):
 
 if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-    load_dotenv(find_dotenv())
-    
+    load_dotenv(find_dotenv())    
     parser = argparse.ArgumentParser()
     parser.add_argument("--query", type=str, required=True, help="질문을 입력하세요.")
     args = parser.parse_args()
 
     response = query(args.query)
     print("\n[최종 답변]")
-    print(f"\n{response}")
-    
+    print(f"\n{response}")    
 
     # 실행 예시: python src/main.py --query "한국전력공사 RFP 문서의 주요 내용은 무엇인가요?"
