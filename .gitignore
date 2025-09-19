@@ -1,7 +1,7 @@
 # CSV, HWP, PDF, Excel files
 *.csv
 *.hwp
-*.pdf
+# *.pdf
 *.xls
 *.xlsx
 
