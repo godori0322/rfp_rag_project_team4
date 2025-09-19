@@ -103,7 +103,7 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
             # extra_attrs로 'size'를 가져오도록 설정
             # extract_words -> 각 단어의 텍스트, 위치, 폰트 크기(size)
             
-            words = page.extract_words(extra_attrs=["size"])
+            words = page.extract_words(extra_attrs=["size", "fontname"])
             reconstructed_lines.extend(reconstruct_lines_from_words(words))
 
     # 폰트 크기를 기준으로 1차 청킹 (챕터 생성)
@@ -139,17 +139,11 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
         content = chapter['content']
         
         # 내용이 긴 챕터만 다시 분할
-        if len(content) > final_chunk_size:
-            sub_chunks = recursive_splitter.split_text(content)
-            for sub_chunk_content in sub_chunks:
-                final_metadata = metadata.copy()
-                final_metadata['parent_header'] = header
-                doc = Document(page_content=sub_chunk_content, metadata=final_metadata)
-                final_documents.append(doc)
-        else:
+        sub_chunks = recursive_splitter.split_text(content)
+        for sub_chunk_content in sub_chunks:
             final_metadata = metadata.copy()
             final_metadata['parent_header'] = header
-            doc = Document(page_content=content, metadata=final_metadata)
+            doc = Document(page_content=sub_chunk_content, metadata=final_metadata)
             final_documents.append(doc)
-            
+        
     return final_documents
