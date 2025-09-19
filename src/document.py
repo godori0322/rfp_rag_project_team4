@@ -1,6 +1,7 @@
 from config import Config
-from dotenv import load_dotenv, find_dotenv
-import fitz  # PyMuPDF
+#from dotenv import load_dotenv, find_dotenv
+#import fitz  # PyMuPDF
+import pdfplumber
 import os
 import pandas as pd
 from typing import List
@@ -49,44 +50,106 @@ def load_documents():
     print(doc_group[0])
     return doc_group
 
-def chunk(filename: str, metadata, page_chunk_size: int = 1500, page_chunk_overlap: int = 150, final_chunk_size: int = 500, final_chunk_overlap: int = 100) -> List[Document]:
-    """
-    1. CharacterTextSplitter를 이용해 페이지 단위로 텍스트를 1차 분할
-    2. RecursiveCharacterTextSplitter를 이용해 1차 분할된 텍스트를 2차 분할
-    """
-    # PDF 파일에서 페이지 단위로 텍스트를 추출하는 함수
-    def extract_pages_as_text(filename: str) -> List[str]:
-        """
-        PyMuPDF를 사용하여 PDF의 각 페이지 텍스트를 추출합니다.
-        """
-        doc = fitz.open(f"{Config.PDF_PATH}/{filename}")
-        pages_text = []
-        for page in doc:
-            pages_text.append(page.get_text())
-        doc.close()
-        return pages_text
 
-    # 1단계: 페이지 단위로 텍스트를 분할 (1차 분할)
-    pages_text = extract_pages_as_text(filename)
+def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_chunk_size: int = 500, final_chunk_overlap: int = 50) -> List[Document]:
+
+    """
+    header_font_threshold: int = 18, 
+    --> 🐹 : 개인적으로 테스트 해봤을때 가장 좋았던 임계값으로 적용해놨습니다.
     
-    # TextSplitter 초기화 (여기서는 페이지를 하나의 덩어리로 간주)
-    # 실제로는 TextSplitter 대신, 페이지를 그대로 사용하는 것이 더 자연스럽습니다.
-    # 여기서는 "두 단계"를 보여주기 위해 TextSplitter의 기본 기능을 활용합니다.
-    page_splitter = CharacterTextSplitter(chunk_size=page_chunk_size,chunk_overlap=page_chunk_overlap)
-    first_stage_chunks = page_splitter.create_documents([t for t in pages_text if t.strip()])
+    ### 1차 수정
+    1. 폰트 크기를 기준으로 구조적인 '챕터'를 먼저 나눕니다.
+    2. 내용이 긴 '챕터'는 RecursiveCharacterTextSplitter로 다시 작게 분할합니다.
     
-    # 2단계: RecursiveCharacterTextSplitter를 이용해 재귀적으로 텍스트 분할 (2차 분할)
-    # 1차 분할된 덩어리들을 다시 분할합니다.
-    recursive_splitter = RecursiveCharacterTextSplitter(chunk_size=final_chunk_size,chunk_overlap=final_chunk_overlap,separators=["\n\n", "\n", " ", ""])
+    ### 2차 수정
+    1. pdfplumber를 사용해 단어 단위로 상세 정보 추출 (텍스트 추출)
+    2. 폰트 크기로 임계값(Threshold) 기준으로 1차 청킹 (챕터 생성)
+    3. RecursiveCharacterTextSplitter로 2차 청킹
     
-    final_chunks = []
-    for doc_chunk in first_stage_chunks:
-        # 1차 청크의 내용을 다시 2차 청킹
-        sub_chunks = recursive_splitter.create_documents([doc_chunk.page_content])
+    
+    """
+    # --- 로컬 헬퍼 함수 정의 ---
+    def reconstruct_lines_from_words(words: List[dict[str, any]]) -> List[dict[str, any]]:
+        """pdfplumber의 단어(word) 목록을 줄(line) 단위로 재구성합니다."""
+        lines = []
+        if not words:
+            return []
         
-        # 메타데이터 추가 (원본 파일 정보)
-        for sub_chunk in sub_chunks:
-            sub_chunk.metadata = metadata
-            final_chunks.append(sub_chunk)
+        current_line_words = [words[0]]
+        for i in range(1, len(words)):
+            # 같은 줄에 있는지 확인 (수직 위치가 거의 동일한 경우)
+            if abs(words[i]['top'] - words[i-1]['top']) < 2:
+                current_line_words.append(words[i])
+            else:
+                # 새 줄 시작
+                lines.append({
+                    'text': ' '.join(w['text'] for w in current_line_words),
+                    'size': current_line_words[0].get('size', 0) # 첫 단어의 크기를 대표로
+                })
+                current_line_words = [words[i]]
+        
+        # 마지막 줄 추가
+        lines.append({
+            'text': ' '.join(w['text'] for w in current_line_words),
+            'size': current_line_words[0].get('size', 0)
+        })
+        return lines
+    # --------------------------
+    
+    # pdfplumber를 사용하여 단어 단위로 상세 정보 추출
+    reconstructed_lines = []
+    with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+            # extra_attrs로 'size'를 가져오도록 설정
+            # extract_words -> 각 단어의 텍스트, 위치, 폰트 크기(size)
             
-    return final_chunks
+            words = page.extract_words(extra_attrs=["size"])
+            reconstructed_lines.extend(reconstruct_lines_from_words(words))
+
+    # 폰트 크기를 기준으로 1차 청킹 (챕터 생성)
+    font_size_chunks = []
+    current_chunk_content = ""
+    current_chunk_header = f"문서 시작 ({os.path.basename(filepath)})"
+
+    for line in reconstructed_lines:
+        font_size = round(line['size'])
+        text = line['text']
+
+        if font_size >= header_font_threshold:
+            if current_chunk_content.strip():
+                font_size_chunks.append({"header": current_chunk_header, "content": current_chunk_content.strip()})
+            current_chunk_header = text
+            current_chunk_content = ""
+        else:
+            current_chunk_content += text + "\n"
+            
+    if current_chunk_content.strip():
+        font_size_chunks.append({"header": current_chunk_header, "content": current_chunk_content.strip()})
+
+    # RecursiveCharacterTextSplitter를 사용하여 2차 청킹
+    recursive_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=final_chunk_size,
+        chunk_overlap=final_chunk_overlap,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    
+    final_documents = []
+    for chapter in font_size_chunks:
+        header = chapter['header']
+        content = chapter['content']
+        
+        # 내용이 긴 챕터만 다시 분할
+        if len(content) > final_chunk_size:
+            sub_chunks = recursive_splitter.split_text(content)
+            for sub_chunk_content in sub_chunks:
+                final_metadata = metadata.copy()
+                final_metadata['parent_header'] = header
+                doc = Document(page_content=sub_chunk_content, metadata=final_metadata)
+                final_documents.append(doc)
+        else:
+            final_metadata = metadata.copy()
+            final_metadata['parent_header'] = header
+            doc = Document(page_content=content, metadata=final_metadata)
+            final_documents.append(doc)
+            
+    return final_documents
