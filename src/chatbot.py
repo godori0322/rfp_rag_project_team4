@@ -25,7 +25,10 @@ class Chatbot:
     def initialize_components(self):
         self.embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL)
         self.vectorstore = FAISS.load_local(Config.VECTOR_DB_PATH, embeddings=self.embeddings, allow_dangerous_deserialization=True)
-        self.retriever = self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": Config.TOP_K})
+        self.retriever = self.vectorstore.as_retriever(
+            # search_type="similarity",  # search_kwargs={"k": Config.TOP_K}
+            search_type="mmr", search_kwargs={"k": Config.TOP_K, "fetch_k": 20, "lambda_mult": 0.5}
+        )
         self.llm = ChatOpenAI(model_name=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
 
     def load_history(self) -> list:
