@@ -16,6 +16,8 @@ tiktoken
 
 # 벡터 DB 
 faiss-cpu
+chromadb
+lark
 
 # 임베딩 & 모델 활용 
 transformers
