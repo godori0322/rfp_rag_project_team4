@@ -24,15 +24,15 @@ def load_documents():
         # page_content는 '텍스트' 컬럼의 내용으로 설정
         print(f"이건 {index + 1}번째 문서: {row['사업명']}")
         metadata = {
-            '공고 번호': row['공고 번호'],
-            '사업명': row['사업명'],
-            '사업 금액': row['사업 금액'],
-            '발주 기관': row['발주 기관'],
-            '공개 일자': row['공개 일자'],
-            '입찰 참여 시작일': row['입찰 참여 시작일'],
-            '입찰 참여 마감일': row['입찰 참여 마감일'],
-            '사업 요약': row['사업 요약'],
-            '파일명': row['파일명']
+            'rfp_number': row['공고 번호'],
+            'project_title': row['사업명'],
+            'budget_krw': row['사업 금액'],
+            'agency': row['발주 기관'],
+            'publish_date': row['공개 일자'],
+            'bid_start_date': row['입찰 참여 시작일'],
+            'bid_end_date': row['입찰 참여 마감일'],
+            'summary': row['사업 요약'],
+            'filename': row['파일명']
         }
 
         # Document 객체 생성
