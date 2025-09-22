@@ -13,6 +13,7 @@ class Config:
     EMBEDDING_MODEL = "text-embedding-3-small"
     # EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
     LLM_MODEL = "gpt-4o-mini"
+    RFP_COLLECTION = 'rfp_documents'
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
     # RAG 파라미터
