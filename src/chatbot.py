@@ -55,10 +55,13 @@ class Chatbot:
     def create_chain(self):
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
+        def format_debug_docs(docs):
+            return "\n(-------------------------------------)\n".join(f'[{doc.metadata["파일명"]}]\n{doc.page_content}' for doc in docs)
 
         def get_context(inputs):
             question = inputs["question"]
             docs = self.retriever.get_relevant_documents(question)
+            print(format_debug_docs(docs))
             return format_docs(docs)
 
         prompt = ChatPromptTemplate.from_messages([
