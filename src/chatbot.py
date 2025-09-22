@@ -6,6 +6,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.schema.output_parser import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
 from config import Config
 
@@ -58,18 +59,19 @@ class Chatbot:
             return format_docs(docs)
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "당신은 주어진 컨텍스트를 기반으로 사용자의 질문에 답변하는 AI 어시턴트입니다. 컨텍스트와 대화 이력의 내용을 최대한 활용하여 빠짐없이, 상세하게 답변해주세요. '제공된 정보만으로는 답변을 찾을 수 없습니다.'라고 솔직하게 말하세요. 추측해서 답변하지 마세요. 반드시 한국어로 답변하세요."),
+            ("system", "당신은 주어진 컨텍스트를 기반으로 사용자의 질문에 답변하는 AI 어시턴트입니다. "
+                       "컨텍스트와 대화 이력을 최대한 활용하여 빠짐없이, 상세하게 답변하세요. "
+                       "답을 알 수 없는 경우 '제공된 정보만으로는 답변할 수 없습니다.'라고 말하세요. "
+                       "추측하지 말고 반드시 한국어로 답변하세요."),
             MessagesPlaceholder("history"),
-            ("human", "Question: {question}\n\nContext: {context}")
+            ("human", "{question}\n\nContext:\n{context}")
         ])
 
         chain = (
-            {
-                "context": get_context,
-                "question": lambda x: x["question"],
-                "history": lambda x: x["history"]
-            }
-            | prompt | self.llm | StrOutputParser()
+            RunnablePassthrough.assign(context=get_context)
+            | prompt
+            | self.llm
+            | StrOutputParser()
         )
 
         return chain
