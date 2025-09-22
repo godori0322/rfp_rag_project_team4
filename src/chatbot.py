@@ -2,7 +2,7 @@ import os
 import json
 from dotenv import load_dotenv, find_dotenv
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.schema.output_parser import StrOutputParser
@@ -26,7 +26,7 @@ class Chatbot:
 
     def initialize_components(self):
         self.embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL)
-        self.vectorstore = FAISS.load_local(Config.VECTOR_DB_PATH, embeddings=self.embeddings, allow_dangerous_deserialization=True)
+        self.vectorstore = Chroma(persist_directory=Config.VECTOR_DB_PATH, embedding_function=self.embeddings, collection_name=Config.RFP_COLLECTION)
         self.llm = ChatOpenAI(model_name=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
         self.retriever = SelfQueryRetriever.from_llm(
             llm=self.llm,
@@ -43,7 +43,7 @@ class Chatbot:
                 AttributeInfo(name="summary", type="string", description="사업 요약"),
                 AttributeInfo(name="filename", type="string", description="파일명")
             ],
-            search_kwargs={"k": Config.TOP_K, "search_type": "mmr", "fetch_k": 20, "lambda_mult": 0.5},
+            search_kwargs={"k": Config.TOP_K}, # "search_type": "mmr", "fetch_k": 20, "lambda_mult": 0.5
             verbose=True  # 쿼리 파싱 과정을 확인하려면 True로 설정
         )        
         # self.retriever = self.vectorstore.as_retriever(
