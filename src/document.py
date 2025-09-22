@@ -36,7 +36,7 @@ def load_documents():
         }
 
         # Document 객체 생성
-        docs = chunk(ext(row['파일명']), metadata=metadata)
+        docs = chunk(os.path.join(Config.PDF_PATH, ext(row['파일명'])), metadata=metadata)
         doc_group.append(docs)
         """
         try:
