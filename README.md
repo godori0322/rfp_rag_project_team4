@@ -18,7 +18,7 @@ config.py에서 경로 및 하이퍼파라미터 일괄적으로 관리
 ### 환경설정 ###
 ```
 python3 -m venv venv
-source .venv/bin/activate
+source venv/bin/activate
 pip install -r requirements.txt
 # pip freeze > requirements.txt # 사용하지 말것 잡다한것까지 업데이트됨
 export OPENAI_API_KEY='your_openai_api_key'
