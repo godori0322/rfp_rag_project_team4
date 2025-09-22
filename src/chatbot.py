@@ -56,7 +56,7 @@ class Chatbot:
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
         def format_debug_docs(docs):
-            return "\n(-------------------------------------)\n".join(f'[{doc.metadata["파일명"]}]\n{doc.page_content}' for doc in docs)
+            return "\n(-------------------------------------)\n".join(f'[{doc.metadata["filename"]}]\n{doc.page_content}' for doc in docs)
 
         def get_context(inputs):
             question = inputs["question"]
