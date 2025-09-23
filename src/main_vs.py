@@ -1,5 +1,4 @@
 from dotenv import load_dotenv, find_dotenv
-import fitz  # PyMuPDF
 import os
 import pandas as pd
 from typing import List
