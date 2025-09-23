@@ -7,6 +7,7 @@ from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import (
     Faithfulness,
     AnswerRelevancy,
+    AnswerSimilarity,
     ContextRecall,
     ContextPrecision,
     AnswerCorrectness,
@@ -36,6 +37,7 @@ ragas_embeddings = OpenAIEmbeddings(client=openai_client, model="text-embedding-
 metrics = [
     Faithfulness(llm=ragas_llm),
     AnswerRelevancy(llm=ragas_llm),
+    AnswerSimilarity(),
     ContextRecall(llm=ragas_llm),
     ContextPrecision(llm=ragas_llm),
     AnswerCorrectness(llm=ragas_llm),
