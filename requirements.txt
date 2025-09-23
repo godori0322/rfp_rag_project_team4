@@ -18,6 +18,7 @@ tiktoken
 faiss-cpu
 chromadb
 lark
+tf_keras
 
 # 임베딩 & 모델 활용 
 transformers

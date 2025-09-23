@@ -23,6 +23,8 @@ def load_documents():
     for index, row in df.iterrows():
         # page_content는 '텍스트' 컬럼의 내용으로 설정
         print(f"이건 {index + 1}번째 문서: {row['사업명']}")
+        # if index > 3:
+        #     break
         metadata = {
             'rfp_number': row['공고 번호'],
             'project_title': row['사업명'],

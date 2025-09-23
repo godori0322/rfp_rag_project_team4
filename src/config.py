@@ -10,8 +10,8 @@ class Config:
     HISTORY_PATH = "./data/history"
 
     # 모델 설정 (시나리오 B: OpenAI 기준)
-    EMBEDDING_MODEL = "text-embedding-3-small"
-    # EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
+    # EMBEDDING_MODEL = "text-embedding-3-small"
+    EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
     LLM_MODEL = "gpt-4o-mini"
     RFP_COLLECTION = 'rfp_documents'
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
