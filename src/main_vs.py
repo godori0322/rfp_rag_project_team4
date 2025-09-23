@@ -21,7 +21,7 @@ def create_vectorstore():
     doc_group = load_documents()
     embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL,openai_api_key=Config.OPENAI_API_KEY)
     dummy_docs = [Document(page_content="초기 생성을 위한 더미 문서입니다.")]
-    vector_store = Chroma.from_documents(documents=[], embedding=embeddings, persist_directory=Config.VECTOR_DB_PATH, collection_name=Config.RFP_COLLECTION)
+    vector_store = Chroma.from_documents(documents=dummy_docs, embedding=embeddings, persist_directory=Config.VECTOR_DB_PATH, collection_name=Config.RFP_COLLECTION)
 
     cnt = 1
     for doc in doc_group:
