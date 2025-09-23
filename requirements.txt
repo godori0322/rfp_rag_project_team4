@@ -25,6 +25,11 @@ torch
 torchvision
 torchaudio
 
+# 검증
+ragas
+datasets
+langchain_openai
+
 # 유틸 
 numpy
 pandas
