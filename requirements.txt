@@ -32,3 +32,5 @@ scikit-learn
 dotenv
 langchain_community
 sentence-transformers
+streamlit
+lark

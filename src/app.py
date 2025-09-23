@@ -1,5 +1,6 @@
 import streamlit as st
-from src.main import Chatbot  # src/main.py에서 Chatbot 클래스를 가져옵니다.
+from chatbot import Chatbot  # src/main.py -> chatbot.py
+from langchain_core.messages import HumanMessage, AIMessage
 
 # --- 1. 페이지 설정 ---
 st.set_page_config(
@@ -9,7 +10,6 @@ st.set_page_config(
 )
 
 # --- 2. 세션 상태 초기화 ---
-# Streamlit은 스크립트를 재실행하므로, 상태를 유지하기 위해 session_state를 사용합니다.
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "chatbot" not in st.session_state:
@@ -24,27 +24,33 @@ with st.sidebar:
     st.markdown("RFP 문서 기반 질의응답 시스템")
     st.divider()
 
-    # 사용자 ID 입력 필드
     user_id_input = st.text_input("사용자 ID를 입력하세요.", key="user_id_input")
 
     if st.button("세션 시작/전환", use_container_width=True):
         if user_id_input:
-            # 새로운 Chatbot 인스턴스 생성 및 세션 상태에 저장
             st.session_state.user_id = user_id_input
+            # Chatbot 인스턴스를 생성하면 __init__에서 자동으로 히스토리를 로드합니다.
             st.session_state.chatbot = Chatbot(st.session_state.user_id)
-            # Chatbot 클래스 내부에서 불러온 이전 대화 기록을 UI에 반영
-            st.session_state.messages = st.session_state.chatbot.get_history()
-            st.success(f"'{st.session_state.user_id}'님, 안녕하세요!")
+            
+            # UI에 표시할 메시지 목록을 생성합니다.
+            st.session_state.messages = []
+            for msg in st.session_state.chatbot.history:
+                if isinstance(msg, HumanMessage):
+                    st.session_state.messages.append({"role": "user", "content": msg.content})
+                elif isinstance(msg, AIMessage):
+                    st.session_state.messages.append({"role": "assistant", "content": msg.content})
+            
+            st.success(f"'{st.session_state.user_id}'님, 안녕하세요! 이전 대화 기록을 불러왔습니다.")
+            # st.rerun()을 호출하여 메인 화면을 즉시 새로고침합니다.
+            st.rerun() 
         else:
             st.error("사용자 ID를 입력해야 합니다.")
     st.divider()
     st.caption("© 2025 입찰메이트 Engineering Team.")
 
-
 # --- 4. 메인 화면: 채팅 인터페이스 ---
 st.title("📑 RFP 문서 분석 및 질의응답")
 
-# 세션이 시작되었는지 확인
 if not st.session_state.chatbot:
     st.info("사이드바에서 사용자 ID를 입력하고 세션을 시작해주세요.")
 else:
@@ -62,12 +68,12 @@ else:
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Chatbot 객체에 질문을 전달하고 답변을 받아옴
+        # Chatbot의 ask 메서드를 호출하여 답변을 받아옴
         with st.spinner("AI가 답변을 생성하는 중입니다..."):
-            # Chatbot 클래스의 핵심 메서드 호출
-            response = st.session_state.chatbot.get_response(prompt)
+            response = st.session_state.chatbot.ask(prompt)
 
         # AI의 답변을 UI에 표시
+        # ask 메서드가 chatbot.history를 자동으로 업데이트하므로 UI용 messages 목록에만 추가
         st.session_state.messages.append({"role": "assistant", "content": response})
         with st.chat_message("assistant"):
             st.markdown(response)
