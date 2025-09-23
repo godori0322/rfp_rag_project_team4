@@ -30,6 +30,7 @@ def create_vectorstore():
         cnt += 1
 
     vector_store.persist()
+    print(f"저장된 문서 수: {vector_store._collection.count()}") # 저장된 문서 수 확인
     print(f"Vector Store 저장 완료: {Config.VECTOR_DB_PATH}")
 
 if __name__ == "__main__":
