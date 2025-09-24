@@ -31,15 +31,15 @@ class Chatbot:
         self.retriever = SelfQueryRetriever.from_llm(
             llm=self.llm,
             vectorstore=self.vectorstore,
-            document_contents="공고 및 사업 관련 내용",
+            document_content_description="공고 및 사업 관련 내용",
             metadata_field_info=[
                 AttributeInfo(name="rfp_number", type="string", description="공고 번호"),
                 AttributeInfo(name="project_title", type="string", description="사업명"),
-                AttributeInfo(name="budget_krw", type="string", description="사업 금액"),
+                AttributeInfo(name="budget_krw", type="integer", description="사업 금액"),
                 AttributeInfo(name="agency", type="string", description="발주 기관"),
-                AttributeInfo(name="publish_date", type="string", description="공개 일자"),
-                AttributeInfo(name="bid_start_date", type="string", description="입찰 참여 시작일"),
-                AttributeInfo(name="bid_end_date", type="string", description="입찰 참여 마감일"),
+                AttributeInfo(name="publish_date", type="date", description="공개 일자"),
+                AttributeInfo(name="bid_start_date", type="date", description="입찰 참여 시작일"),
+                AttributeInfo(name="bid_end_date", type="date", description="입찰 참여 마감일"),
                 AttributeInfo(name="summary", type="string", description="사업 요약"),
                 AttributeInfo(name="filename", type="string", description="파일명")
             ],
