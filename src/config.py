@@ -6,7 +6,7 @@ import os
 class Config:
     DATA_PATH = "./data/raw"
     PDF_PATH = "./data/pdf"
-    VECTOR_DB_PATH = "./data/vectorstore/vector_db"
+    VECTOR_DB_PATH = "./data/vectorstore"
     HISTORY_PATH = "./data/history"
 
     # 모델 설정 (시나리오 B: OpenAI 기준)
