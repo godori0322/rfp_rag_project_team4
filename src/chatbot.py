@@ -31,7 +31,7 @@ class Chatbot:
         self.retriever = SelfQueryRetriever.from_llm(
             llm=self.llm,
             vectorstore=self.vectorstore,
-            document_content_description="공고 및 사업 관련 내용",
+            document_contents="공고 및 사업 관련 내용",
             metadata_field_info=[
                 AttributeInfo(name="rfp_number", type="string", description="공고 번호"),
                 AttributeInfo(name="project_title", type="string", description="사업명"),
