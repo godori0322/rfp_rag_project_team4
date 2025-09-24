@@ -17,12 +17,10 @@ def load_documents():
 
     # NaN 값을 빈 문자열로 대체하여 메타데이터에 문제가 없도록 처리
     df = df.fillna('')
-
     doc_group = []
+    annotations = []
 
     for index, row in df.iterrows():
-        # page_content는 '텍스트' 컬럼의 내용으로 설정
-        print(f"이건 {index + 1}번째 문서: {row['사업명']}")
         metadata = {
             'rfp_number': row['공고 번호'],
             'project_title': row['사업명'],
@@ -38,16 +36,13 @@ def load_documents():
         # Document 객체 생성
         docs = chunk(os.path.join(Config.PDF_PATH, ext(row['파일명'])), metadata=metadata)
         doc_group.append(docs)
-        """
-        try:
-            docs = load_documents(ext(row['파일명']), metadata=metadata)
-            documents.extend(docs)
-        except Exception as e:
-            print(f"Error loading document {row['파일명']}: {e}")
-            continue
-        """
+
+        annotations.append(f"이건 {index + 1}번째 문서. 총 청크갯수: {len(docs)}. {row['파일명']}")
+        print(annotations[len(annotations) - 1])
+        
     print(f"총 {len(doc_group)}개의 문서가 로드되었습니다.")
-    print(doc_group[0])
+    for anno in annotations:
+        print(anno)
     return doc_group
 
 
