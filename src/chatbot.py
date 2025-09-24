@@ -76,18 +76,19 @@ class Chatbot:
         return self.retriever.get_relevant_documents(question)
     
     def find_contexts(self, docs):
-        return [doc.page_content for doc in docs]
+        return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
 
     def create_chain(self):
         def format_docs(docs):
             return "\n\n".join(self.find_contexts(docs))
         def format_debug_docs(docs):
+            ## return "\n(-------------------------------------)\n".join(docs)
             return "\n(-------------------------------------)\n".join(f'[{doc.metadata["filename"]}]\n{doc.page_content}' for doc in docs)
 
         def get_context(inputs):
             question = inputs["question"]
             docs = self.find_documents(question)
-            print(format_debug_docs(docs))
+            print(format_docs(docs))
             return format_docs(docs)
 
         prompt = ChatPromptTemplate.from_messages([
