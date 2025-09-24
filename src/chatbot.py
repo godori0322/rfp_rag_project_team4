@@ -72,15 +72,21 @@ class Chatbot:
             ]
             json.dump(history_json, f, ensure_ascii=False, indent=4)
 
+    def find_documents(self, question):
+        return self.retriever.get_relevant_documents(question)
+    
+    def find_contexts(self, docs):
+        return [doc.page_content for doc in docs]
+
     def create_chain(self):
         def format_docs(docs):
-            return "\n\n".join(doc.page_content for doc in docs)
+            return "\n\n".join(self.find_contexts(docs))
         def format_debug_docs(docs):
             return "\n(-------------------------------------)\n".join(f'[{doc.metadata["filename"]}]\n{doc.page_content}' for doc in docs)
 
         def get_context(inputs):
             question = inputs["question"]
-            docs = self.retriever.get_relevant_documents(question)
+            docs = self.find_documents(question)
             print(format_debug_docs(docs))
             return format_docs(docs)
 
@@ -102,7 +108,7 @@ class Chatbot:
 
         return chain
 
-    def ask(self, query: str) -> str:
+    def ask(self, query: str, is_save=True) -> str:
         response = self.chain.invoke({
             "question": query,
             "history": self.history
@@ -110,6 +116,8 @@ class Chatbot:
 
         self.history.append(HumanMessage(content=query))
         self.history.append(AIMessage(content=response))
-        self.save_history()
+        
+        if is_save:
+            self.save_history()
 
         return response
