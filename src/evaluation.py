@@ -48,12 +48,7 @@ def generate_ragas_dataset(test_questions_with_ground_truths: list[dict]):
     """
     제공된 테스트 질문과 정답을 기반으로 RAGAS 평가용 데이터셋을 생성합니다.
     """
-    ragas_data = {
-        'question': [],
-        'answer': [],
-        'contexts': [],
-        'reference': []
-    }   
+    ragas_data = { 'question': [], 'answer': [], 'contexts': [], 'reference': []}   
 
     for item in test_questions_with_ground_truths:
         question = item['question']
@@ -100,7 +95,3 @@ if __name__ == "__main__":
     )
     print("RAGAS 평가 완료.")
     print(result)
-
-    # result_df = result.to_dataframe()
-    # print("\n평가 결과 DataFrame:")
-    # print(result_df)
