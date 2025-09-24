@@ -84,7 +84,7 @@ if __name__ == "__main__":
     #     {'question': "제안서 작성 시 유의해야 할 주요 사항은 무엇인가요?", 
     #      'ground_truth': "제안서 작성 시 유의사항으로는 제안서의 효력 유지, 제안서 내용의 명확성, 제안서 구성의 일관성, 객관적인 증빙자료 제시, 제안서 내용 변경 금지, 기한 내 제출, 제출된 제안서의 권리 귀속 등이 있습니다. 또한, 제출된 제안서는 반환되지 않으며, 제안서 작성 및 제출과 관련된 비용은 제안사가 부담해야 합니다."},
     # ]
-    df = pd.read_csv("data/evaluation2.csv")
+    df = pd.read_csv("data/evaluation.csv")
     test_questions_with_ground_truths = df.to_dict(orient='records')
    
     print("RAGAS 데이터셋 생성 중...")
