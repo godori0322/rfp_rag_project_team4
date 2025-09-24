@@ -53,32 +53,23 @@ def generate_ragas_dataset(test_questions_with_ground_truths: list[dict]):
         'answer': [],
         'contexts': [],
         'reference': []
-    }
-
-    eval_chatbot = Chatbot(user_id="ragas_eval_user")
+    }   
 
     for item in test_questions_with_ground_truths:
         question = item['question']
         ground_truth = item['ground_truth']
 
-        retrieved_docs = eval_chatbot.retriever.get_relevant_documents(question)
-        contexts = [doc.page_content for doc in retrieved_docs]
-        
-        formatted_context_for_prompt = "\n\n".join(doc.page_content for doc in retrieved_docs)
-        
-        chatbot_response = eval_chatbot.chain.invoke({
-            "question": question,
-            "history": [],
-            "context": formatted_context_for_prompt
-        })
+        bot = Chatbot(user_id="ragas_eval_user")
+        bot_response = bot.ask(question, False)
+        bot_contexts = bot.find_contexts(bot.find_documents(question))
 
         print('======= chatbot_response ==========')
-        print(chatbot_response)
+        print(bot_response)
         print('===================================')
         
         ragas_data['question'].append(question)
-        ragas_data['answer'].append(chatbot_response)
-        ragas_data['contexts'].append(contexts)
+        ragas_data['answer'].append(bot_response)
+        ragas_data['contexts'].append(bot_contexts)
         ragas_data['reference'].append(ground_truth)
 
     return Dataset.from_dict(ragas_data)
