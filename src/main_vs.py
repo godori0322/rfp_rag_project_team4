@@ -26,7 +26,7 @@ def create_vectorstore():
     cnt = 1
     for doc in doc_group:
         vector_store.add_documents(doc)
-        print(f"문서 추가 완료: 페이지 {cnt}")
+        print(f"{cnt}번 문서 추가 완료. 총 청크갯수: {len(doc)}")
         cnt += 1
 
     vector_store.persist()
