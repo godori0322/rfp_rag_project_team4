@@ -27,5 +27,13 @@ python src/main.py --query "안녕하세요"
 
 ### 실행방법 ###
 data/pdf 폴더에 PDF 파일 100개 준비된 상태에서 벡터 스토어 생성
+```
 python src/main_vs.py
+```
 =======
+
+### 스트림릿 실행방법 ###
+```
+pip install -r requirements.txt
+streamlit run src/app.py
+```
