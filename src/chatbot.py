@@ -42,7 +42,7 @@ class Chatbot:
 
         self.initialize_components()
         self.history = self.load_history()
-        router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore,
+        router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer,
             find_documents_func=self.find_documents, find_contexts_func=self.find_contexts
         )
         self.chain = router.create_router_chain()
