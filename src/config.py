@@ -27,7 +27,7 @@ class Config:
 
 class LangSmithConfig:
     LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
-    LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "rfp_rag_project_team4")
+    LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "rfp_rag_project")
     LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
     LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "true")
 
