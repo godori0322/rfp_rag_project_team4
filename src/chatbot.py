@@ -125,21 +125,6 @@ class Chatbot:
             {"callbacks": [self.tracer]}
         )
 
-    async def get_answer(self, query: str) -> str:
-        config = RunnableConfig(
-            callbacks=[self.tracer, self.rag_handler]
-        )
-        
-        response = await self.chain.ainvoke(
-            {"query": query},
-            config=config
-        )
-        
-        # Generate visualization
-        self.rag_handler.visualize("rag_process.png")
-        
-        return response
-
     def ask(self, query: str) -> str:
         response = self.chain.invoke({
             "question": query,
