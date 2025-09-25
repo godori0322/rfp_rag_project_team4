@@ -135,7 +135,7 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
         header = chapter['header']
         content = chapter['content']
         
-        if '목 차' == " ".join(header.split()).strip():
+        if '목 차' == (" ".join(header.split()).strip()):
             print(f'### 다음은 목차내용이라 제외합니다 ({content[:50]}...)')
             continue
 
