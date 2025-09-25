@@ -135,9 +135,9 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
         header = chapter['header']
         content = chapter['content']
         
-        if '목 차' == (" ".join(header.split()).strip()):
-            print(f'### 다음은 목차내용이라 제외합니다 ({content})')
-            continue
+        # if '목 차' == (" ".join(header.split()).strip()):
+        #     print(f'### 다음은 목차내용이라 제외합니다 ((({content})))')
+        #     continue
 
         # 내용이 긴 챕터만 다시 분할
         sub_chunks = recursive_splitter.split_text(content)
@@ -153,7 +153,7 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
     return final_documents
 
 
-def is_high_special_char_ratio(text: str, threshold: float = 0.7) -> bool:    
+def is_high_special_char_ratio(text: str, threshold: float = 0.6) -> bool:
     SPECIAL_CHARS = set(string.punctuation + '`~!@#$%^&*()_+-=[]{}|;:",./<>?·') # 특수문자 정의 (구두점 및 기타 기호)
     
     total_length = len(text)
