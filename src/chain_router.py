@@ -75,15 +75,7 @@ class ChainRouter:
     def _create_summarization_chain(self):
         """## 변경된 로직: 정보 요약 체인 (Route 2) - LCEL 기반 Map-Reduce"""
         
-        # 1. 대화 맥락을 고려하여 질문을 재구성하는 리트리버 체인
-        contextualize_prompt = ChatPromptTemplate.from_messages([
-            ("system", "과거 대화 내용을 바탕으로 다음 질문을 재구성하세요. 단, 요약하려는 문서에 대한 정보를 구체적으로 포함해야 합니다."),
-            MessagesPlaceholder("history"),
-            ("human", "{input}"),
-        ])
-        history_aware_retriever_chain = create_history_aware_retriever(self.llm, self.retriever, contextualize_prompt)
-
-        # 2. 검색 및 문서 분할 (get_documents_with_metadata는 기존 로직)
+        # 1. 검색 및 문서 분할 (get_documents_with_metadata는 기존 로직)
         def get_documents_with_metadata(x):
             docs = self.find_documents(x['input'])
             # 메타데이터를 텍스트에 포함시켜 반환
@@ -92,7 +84,7 @@ class ChainRouter:
                 print(f'{doc.page_content}\n')
             return docs
 
-        # 3. Map 단계 프롬프트
+        # 2. Map 단계 프롬프트
         map_prompt_template = """
         다음은 RFP 문서의 일부 내용입니다. 이 내용에서 핵심 정보를 요약하세요.
         ---
@@ -103,7 +95,7 @@ class ChainRouter:
         map_prompt = ChatPromptTemplate.from_template(map_prompt_template)
         map_chain = map_prompt | self.llm | StrOutputParser()
 
-        # 4. Reduce 단계 프롬프트
+        # 3. Reduce 단계 프롬프트
         reduce_prompt_template = """
         다음은 여러 문서 청크에 대한 요약본입니다. 이 요약들을 종합하여 하나의 최종 요약을 생성하세요.
         최종 요약은 핵심 내용을 간결하고 명확하게 포함해야 합니다.
@@ -115,12 +107,10 @@ class ChainRouter:
         reduce_prompt = ChatPromptTemplate.from_template(reduce_prompt_template)
         reduce_chain = reduce_prompt | self.llm | StrOutputParser()
         
-        # 5. 전체 파이프라인 결합
+        # 4. 전체 파이프라인 결합
         # 문서 검색 -> 각 문서를 요약(map) -> 요약들을 합쳐 최종 요약(reduce)
         summarize_pipeline = (
-            # 대화 맥락을 고려한 검색
-            RunnablePassthrough.assign(retrieved_docs=history_aware_retriever_chain)
-            | RunnableLambda(get_documents_with_metadata)
+            RunnableLambda(get_documents_with_metadata)
             | map_chain.map()  # 모든 문서에 대해 map_chain 실행
             | reduce_chain      # map 결과를 reduce_chain에 전달
         )
