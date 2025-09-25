@@ -60,7 +60,7 @@ class Chatbot:
         self.retriever = SelfQueryRetriever.from_llm(
             llm=self.llm,
             vectorstore=self.vectorstore,
-            document_contents="공고 및 사업 관련 내용",
+            document_contents="정부 및 공공기관에서 발주하는 RFP(제안요청서)의 상세 내용. 사업 개요, 예산, 기간, 제안 조건 등을 포함함. ",
             metadata_field_info=[
                 AttributeInfo(name="rfp_number", type="string", description="공고 번호"),
                 AttributeInfo(name="project_title", type="string", description="사업명"),

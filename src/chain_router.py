@@ -128,16 +128,59 @@ class ChainRouter:
         )
 
     def _create_recommendation_chain(self):
-        """## 유사 사업 추천 체인 (Route 5)"""
-        # 의미적 유사성 검색을 활용
-        return (
-            RunnablePassthrough.assign(
-                docs=RunnableLambda(lambda x: self.vectorstore.as_retriever(search_type="mmr").get_relevant_documents(x['input']))
-            )
-            | RunnableLambda(
-                lambda x: "다음은 의미적으로 유사한 사업 추천 목록입니다.\n\n" + "\n\n".join([
-                    f"- {doc.metadata.get('project_title', '제목 없음')} (공고번호: {doc.metadata.get('rfp_number', '미상')})"
-                    for doc in x['docs']
-                ])
-            )
+        """## 유사 사업 추천 체인 (Route 5) - [Query Expansion 적용]"""
+
+        # 1. 질의 확장(Query Expansion)을 위한 체인 정의
+        query_expansion_prompt = ChatPromptTemplate.from_template(
+            """당신은 사용자의 질문을 벡터 검색에 더 효과적인 키워드 목록으로 확장하는 전문가입니다.
+            사용자의 원본 질문의 핵심 의미를 파악하여, 관련 동의어, 기술 용어, 상위 개념 등을 포함한 검색 키워드 3개를 쉼표(,)로 구분하여 생성하세요.
+
+            사용자 질문: {input}
+            검색 키워드:"""
         )
+
+        query_expansion_chain = query_expansion_prompt | self.llm | StrOutputParser()
+
+        # 2. 기존 추천 체인 로직 (헬퍼 함수 등)
+        def format_docs(docs: List[Document]) -> str:
+            return "\n\n".join(
+                f"### 사업명: {doc.metadata.get('project_title', '제목 없음')}\n"
+                f"공고번호: {doc.metadata.get('rfp_number', '미상')}\n"
+                f"요약:\n{doc.metadata.get('summary', doc.page_content)}"
+                for doc in docs
+            )
+
+        recommendation_prompt = ChatPromptTemplate.from_template(
+            """당신은 사용자의 요청에 기반하여 유사한 사업을 추천하고, 그 이유를 설명하는 B2G 입찰 전문 컨설턴트입니다.
+
+            **사용자 원본 요청:**
+            {original_input}
+
+            **검색된 유사 사업 목록:**
+            {context}
+
+            **지시사항:**
+            '검색된 유사 사업 목록'을 바탕으로, 각 사업이 왜 '사용자 원본 요청'과 유사한지 핵심 이유를 설명하며 추천 목록을 작성해주십시오.
+            """
+        )
+        
+        mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
+
+        # 3. 전체 체인 결합
+        recommendation_chain = (
+            {
+                # 'expanded_query' 키에 확장된 쿼리 결과를 할당
+                "expanded_query": query_expansion_chain,
+                # 'original_input' 키에 원본 사용자 입력을 그대로 유지
+                "original_input": (lambda x: x["input"])
+            }
+            | RunnablePassthrough.assign(
+                # 확장된 쿼리('expanded_query')를 사용해 문서를 검색하고, 그 결과를 'context'에 할당
+                context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
+            )
+            | recommendation_prompt
+            | self.llm
+            | StrOutputParser()
+        )
+        
+        return recommendation_chain
