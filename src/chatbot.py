@@ -1,6 +1,5 @@
 import os
 import json
-from dotenv import load_dotenv, find_dotenv
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -26,7 +25,6 @@ class Chatbot:
         self.user_id = user_id
         self.history_file = os.path.join(Config.HISTORY_PATH, f"{self.user_id}_history.json")
 
-        load_dotenv(find_dotenv())
         os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
         # Validate LangSmith configuration

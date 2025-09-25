@@ -1,6 +1,9 @@
 from dotenv import load_dotenv
 from dataclasses import dataclass
 import os
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
 
 @dataclass
 class Config:
