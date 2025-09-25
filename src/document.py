@@ -130,7 +130,6 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
     )
     
     final_documents = []
-    SPECIAL_CHARS = set(string.punctuation + '`~!@#$%^&*()_+-=[]{}|;:",./<>?')
     for chapter in font_size_chunks:
         header = chapter['header']
         content = chapter['content']
