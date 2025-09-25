@@ -21,3 +21,14 @@ class Config:
     CHUNK_OVERLAP = 100
     TOP_K = 5
     TEMPERATURE = 0.2
+
+class LangSmithConfig:
+    LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+    LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "rfp_rag_project_team4")
+    LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+    LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "true")
+
+    @classmethod
+    def validate_config(cls):
+        if not cls.LANGCHAIN_API_KEY:
+            raise ValueError("LANGCHAIN_API_KEY is not set in environment variables")
