@@ -7,6 +7,7 @@ import pandas as pd
 from typing import List
 from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTextSplitter
 from langchain.schema import Document
+import string
 
 def load_documents():
     def ext(original_filename, ext='pdf'):
@@ -69,7 +70,7 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
         lines = []
         if not words:
             return []
-        
+
         current_line_words = [words[0]]
         for i in range(1, len(words)):
             # 같은 줄에 있는지 확인 (수직 위치가 거의 동일한 경우)
@@ -82,7 +83,7 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
                     'size': current_line_words[0].get('size', 0) # 첫 단어의 크기를 대표로
                 })
                 current_line_words = [words[i]]
-        
+
         # 마지막 줄 추가
         lines.append({
             'text': ' '.join(w['text'] for w in current_line_words),
@@ -90,14 +91,14 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
         })
         return lines
     # --------------------------
-    
+
     # pdfplumber를 사용하여 단어 단위로 상세 정보 추출
     reconstructed_lines = []
     with pdfplumber.open(filepath) as pdf:
         for page in pdf.pages:
             # extra_attrs로 'size'를 가져오도록 설정
             # extract_words -> 각 단어의 텍스트, 위치, 폰트 크기(size)
-            
+
             words = page.extract_words(extra_attrs=["size", "fontname"])
             reconstructed_lines.extend(reconstruct_lines_from_words(words))
 
@@ -117,7 +118,7 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
             current_chunk_content = ""
         else:
             current_chunk_content += text + "\n"
-            
+
     if current_chunk_content.strip():
         font_size_chunks.append({"header": current_chunk_header, "content": current_chunk_content.strip()})
 
@@ -133,12 +134,35 @@ def chunk(filepath: str, metadata: dict, header_font_threshold: int = 18, final_
         header = chapter['header']
         content = chapter['content']
         
+        # if '목 차' == (" ".join(header.split()).strip()):
+        #     print(f'### 다음은 목차내용이라 제외합니다 ((({content})))')
+        #     continue
+
         # 내용이 긴 챕터만 다시 분할
         sub_chunks = recursive_splitter.split_text(content)
         for sub_chunk_content in sub_chunks:
+            if is_high_special_char_ratio(sub_chunk_content):
+                continue
+
             final_metadata = metadata.copy()
             final_metadata['parent_header'] = header
             doc = Document(page_content=sub_chunk_content, metadata=final_metadata)
             final_documents.append(doc)
         
     return final_documents
+
+
+def is_high_special_char_ratio(text: str, threshold: float = 0.6) -> bool:
+    SPECIAL_CHARS = set(string.punctuation + '`~!@#$%^&*()_+-=[]{}|;:",./<>?·') # 특수문자 정의 (구두점 및 기타 기호)
+    
+    total_length = len(text)
+    if total_length == 0:
+        return False
+
+    special_char_count = sum(1 for char in text if char in SPECIAL_CHARS)
+    special_char_ratio = special_char_count / total_length
+
+    if special_char_ratio > threshold:
+        print(f"---- 청크 제외됨 (특수문자 비율 {special_char_ratio:.2f}) ----")
+        print(f"제외된 청크 내용: {text}")
+    return special_char_ratio > threshold
