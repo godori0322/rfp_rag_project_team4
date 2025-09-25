@@ -73,8 +73,15 @@ class ChainRouter:
             ("system", "제공된 RFP 문서의 내용을 바탕으로 핵심 정보를 간결하게 요약하세요."),
             ("human", "문서 내용:\n{context}")
         ])
+        def find_contexts(x):
+            contexts = self.find_contexts(self.find_documents(x['input']))
+            for context in contexts:
+                print(context)
+                print()
+            return contexts
+        
         return (
-            RunnablePassthrough.assign(context=RunnableLambda(lambda x: self.find_contexts(self.find_documents(x['input']))))
+            RunnablePassthrough.assign(context=RunnableLambda(find_contexts)) # lambda x: self.find_contexts(self.find_documents(x['input']))
             | summarization_prompt
             | self.llm
             | StrOutputParser()
