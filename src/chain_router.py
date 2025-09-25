@@ -8,10 +8,11 @@ from typing import List, Dict
 from langchain.schema.output_parser import StrOutputParser
 
 class ChainRouter:
-    def __init__(self, llm, retriever, vectorstore, find_documents_func, find_contexts_func):
+    def __init__(self, llm, retriever, vectorstore, tracer, find_documents_func, find_contexts_func):
         self.llm = llm
         self.retriever = retriever
         self.vectorstore = vectorstore
+        self.tracer = tracer
         self.find_documents = find_documents_func
         self.find_contexts = find_contexts_func
 
@@ -52,7 +53,9 @@ class ChainRouter:
             else:
                 return self._create_specific_qa_chain()
 
-        return router_chain_optimized
+        return router_chain_optimized.with_config(
+            {"callbacks": [self.tracer]}
+        )
 
     def _create_metadata_search_chain(self):
         """## 메타데이터 검색 체인 (Route 1)"""
