@@ -14,8 +14,11 @@ from langchain.chains import create_history_aware_retriever, create_retrieval_ch
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from typing import List, Dict
 
-from config import Config
 from chain_router import ChainRouter
+from langsmith import Client
+from langchain.callbacks.tracers import LangChainTracer
+from config import Config, LangSmithConfig
+from rag_graph import RAGCallbackHandler
 
 
 class Chatbot:
@@ -26,6 +29,19 @@ class Chatbot:
         load_dotenv(find_dotenv())
         os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+        # Validate LangSmith configuration
+        LangSmithConfig.validate_config()
+        
+        # Initialize LangSmith client with explicit API key
+        self.langsmith_client = Client(
+            api_key=LangSmithConfig.LANGCHAIN_API_KEY,
+            api_url=LangSmithConfig.LANGCHAIN_ENDPOINT
+        )
+        
+        self.tracer = LangChainTracer(
+            project_name=LangSmithConfig.LANGCHAIN_PROJECT
+        )
+
         self.initialize_components()
         self.history = self.load_history()
         router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore,
@@ -33,11 +49,16 @@ class Chatbot:
         )
         self.chain = router.create_router_chain()
         #self.chain = self.create_router_chain() # self.create_chain()
+        self.rag_handler = RAGCallbackHandler()
 
     def initialize_components(self):
         self.embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL)
         self.vectorstore = Chroma(persist_directory=Config.VECTOR_DB_PATH, embedding_function=self.embeddings, collection_name=Config.RFP_COLLECTION)
-        self.llm = ChatOpenAI(model_name=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
+        self.llm = ChatOpenAI(
+            model_name=Config.LLM_MODEL, 
+            temperature=Config.TEMPERATURE,
+            callbacks=[self.tracer]
+        )
         self.retriever = SelfQueryRetriever.from_llm(
             llm=self.llm,
             vectorstore=self.vectorstore,
@@ -120,8 +141,9 @@ class Chatbot:
     #         | self.llm
     #         | StrOutputParser()
     #     )
-
-    #     return chain
+    #     return chain.with_config(
+    #         {"callbacks": [self.tracer]}
+    #     )
 
     def ask(self, query: str, is_save=True) -> str:
         """사용자 질문에 답변합니다."""
