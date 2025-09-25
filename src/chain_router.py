@@ -1,4 +1,5 @@
 # chain_router.py
+import json
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda, chain
 from langchain_openai import ChatOpenAI
@@ -6,6 +7,7 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from typing import List, Dict
 from langchain.schema.output_parser import StrOutputParser
+from langchain.chains.summarize import load_summarize_chain
 from langchain.schema import Document
 
 class ChainRouter:
@@ -70,26 +72,119 @@ class ChainRouter:
             )
         )
 
-    def _create_summarization_chain(self):
-        """## 정보 요약 체인 (Route 2)"""
-        # 긴 문서를 처리하기 위해 map-reduce 방식 등을 고려할 수 있음
-        summarization_prompt = ChatPromptTemplate.from_messages([
-            ("system", "제공된 RFP 문서의 내용을 바탕으로 핵심 정보를 간결하게 요약하세요."),
-            ("human", "문서 내용:\n{context}")
-        ])
-        def find_contexts(x):
-            contexts = self.find_contexts(self.find_documents(x['input']))
-            for context in contexts:
-                print(context)
-                print()
-            return contexts
+    # def _create_summarization_chain(self):
+    #     """## 정보 요약 체인 (Route 2)"""
+    #     # 긴 문서를 처리하기 위해 map-reduce 방식 등을 고려할 수 있음
+    #     summarization_prompt = ChatPromptTemplate.from_messages([
+    #         ("system", "제공된 RFP 문서의 내용을 바탕으로 핵심 정보를 간결하게 요약하세요."),
+    #         ("human", "문서 내용:\n{context}")
+    #     ])
+    #     def find_contexts(x):
+    #         contexts = self.find_contexts(self.find_documents(x['input']))
+    #         for context in contexts:
+    #             print(context)
+    #             print()
+    #         return contexts
         
-        return (
-            RunnablePassthrough.assign(context=RunnableLambda(find_contexts)) # lambda x: self.find_contexts(self.find_documents(x['input']))
-            | summarization_prompt
-            | self.llm
-            | StrOutputParser()
+    #     return (
+    #         RunnablePassthrough.assign(context=RunnableLambda(find_contexts)) # lambda x: self.find_contexts(self.find_documents(x['input']))
+    #         | summarization_prompt
+    #         | self.llm
+    #         | StrOutputParser()
+    #     )
+
+    # def _create_summarization_chain(self):
+    #     """## 변경된 로직: 정보 요약 체인 (Route 2) - 메타데이터 포함 Map-Reduce 방식 적용"""
+        
+    #     # 1단계: 검색된 문서들을 Document 객체 리스트로 변환 (메타데이터 포함)
+    #     def get_documents_with_metadata(x):
+    #         docs = self.find_documents(x['input'])
+    #         # 각 문서에 메타데이터를 추가
+    #         for doc in docs:
+    #             print(f'{doc}\n')
+    #         return [ Document(page_content=doc.page_content, metadata=doc.metadata) for doc in docs ]
+
+    #     # 2단계: Map 단계 프롬프트 (메타데이터를 함께 전달)
+    #     map_prompt_template = """
+    #     다음은 RFP 문서의 일부 내용과 메타데이터입니다. 핵심 내용을 파악하여 요약하세요.
+    #     ---
+    #     문서 내용: {text}
+    #     메타데이터: {metadata}
+    #     ---
+    #     요약:
+    #     """
+    #     map_prompt = ChatPromptTemplate.from_template(map_prompt_template)
+
+    #     # 3단계: Reduce 단계 프롬프트
+    #     reduce_prompt_template = """
+    #     다음은 여러 문서 청크의 요약본입니다. 이 요약들을 종합하여 최종 요약을 생성하세요.
+    #     ---
+    #     {text}
+    #     ---
+    #     최종 요약:
+    #     """
+    #     reduce_prompt = ChatPromptTemplate.from_template(reduce_prompt_template)
+
+    #     # 4단계: Map-Reduce 요약 체인 생성
+    #     summarize_chain = load_summarize_chain(
+    #         self.llm,
+    #         chain_type="map_reduce",
+    #         map_prompt=map_prompt,
+    #         combine_prompt=reduce_prompt,
+    #         return_intermediate_steps=False
+    #     )
+
+    #     # 5단계: 전체 파이프라인 결합
+    #     return (
+    #         RunnablePassthrough.assign(docs_for_summary=RunnableLambda(get_documents_with_metadata))
+    #         | RunnableLambda(lambda x: summarize_chain.invoke({"input_documents": x["docs_for_summary"]}))
+    #     )
+
+
+    def _create_summarization_chain(self):
+        """## 변경된 로직: 정보 요약 체인 (Route 2) - LCEL 기반 Map-Reduce"""
+        
+        # 1. 검색 및 문서 분할 (get_documents_with_metadata는 기존 로직)
+        def get_documents_with_metadata(x):
+            docs = self.find_documents(x['input'])
+            # 메타데이터를 텍스트에 포함시켜 반환
+            docs = [Document(page_content=f"메타데이터: {json.dumps(doc.metadata, ensure_ascii=False, indent=2)}\n\n문서 내용: {doc.page_content}") for doc in docs]
+            for doc in docs:
+                print(f'{doc.page_content}\n')
+            return docs
+
+        # 2. Map 단계 프롬프트
+        map_prompt_template = """
+        다음은 RFP 문서의 일부 내용입니다. 이 내용에서 핵심 정보를 요약하세요.
+        ---
+        {text}
+        ---
+        요약:
+        """
+        map_prompt = ChatPromptTemplate.from_template(map_prompt_template)
+        map_chain = map_prompt | self.llm | StrOutputParser()
+
+        # 3. Reduce 단계 프롬프트
+        reduce_prompt_template = """
+        다음은 여러 문서 청크에 대한 요약본입니다. 이 요약들을 종합하여 하나의 최종 요약을 생성하세요.
+        최종 요약은 핵심 내용을 간결하고 명확하게 포함해야 합니다.
+        ---
+        {text}
+        ---
+        최종 요약:
+        """
+        reduce_prompt = ChatPromptTemplate.from_template(reduce_prompt_template)
+        reduce_chain = reduce_prompt | self.llm | StrOutputParser()
+        
+        # 4. 전체 파이프라인 결합
+        # 문서 검색 -> 각 문서를 요약(map) -> 요약들을 합쳐 최종 요약(reduce)
+        summarize_pipeline = (
+            RunnableLambda(get_documents_with_metadata)
+            | map_chain.map()  # 모든 문서에 대해 map_chain 실행
+            | reduce_chain      # map 결과를 reduce_chain에 전달
         )
+        
+        return summarize_pipeline
 
     def _create_specific_qa_chain(self):
         """## 구체적 질의응답 체인 (Route 3)"""
