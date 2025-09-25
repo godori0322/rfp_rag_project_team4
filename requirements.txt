@@ -39,3 +39,5 @@ langchain_community
 sentence-transformers
 streamlit
 lark
+networkx
+matplotlib
