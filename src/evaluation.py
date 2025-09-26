@@ -7,11 +7,10 @@ from ragas import evaluate
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import (
     Faithfulness,
-    AnswerRelevancy,
-    AnswerSimilarity,
+    AnswerCorrectness,
+    ContextRelevancy,
     ContextRecall,
     ContextPrecision,
-    AnswerCorrectness,
 )
 from langchain_openai import ChatOpenAI
 from ragas.embeddings import OpenAIEmbeddings
@@ -32,18 +31,24 @@ ragas_llm = LangchainLLMWrapper(langchain_llm=ragas_llm_base)
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # 수정: ragas.embeddings.OpenAIEmbeddings에 비동기 client 인자를 전달
-ragas_embeddings = OpenAIEmbeddings(client=openai_client, model="text-embedding-3-large")
+ragas_embeddings = OpenAIEmbeddings(client=openai_client, model="text-embedding-3-small")
 
 # RAGAS 메트릭 초기화
 metrics = [
-    Faithfulness(llm=ragas_llm),
-    AnswerRelevancy(llm=ragas_llm),
-    AnswerSimilarity(),
-    ContextRecall(llm=ragas_llm),
-    ContextPrecision(llm=ragas_llm),
-    AnswerCorrectness(llm=ragas_llm),
-]
+    # --- Retrieval Evaluation ---
+    # ContextRelevancy: Is the retrieved context relevant to the question?
+    ContextRelevancy(), 
+    # ContextPrecision: Is the context useful for answering (signal-to-noise)?
+    ContextPrecision(),
+    # ContextRecall: Does the context contain all necessary info from the ground truth?
+    ContextRecall(),
 
+    # --- Generation Evaluation ---
+    # Faithfulness: Does the answer stick to the retrieved context?
+    Faithfulness(),
+    # AnswerCorrectness: Is the answer factually correct compared to the ground truth?
+    AnswerCorrectness(),
+]
 def generate_ragas_dataset(test_questions_with_ground_truths: list[dict]):
     """
     제공된 테스트 질문과 정답을 기반으로 RAGAS 평가용 데이터셋을 생성합니다.
