@@ -39,7 +39,7 @@ class Chatbot:
         self.initialize_components()
         self.history = self.load_history()
         self.router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer)
-        self.chain = router.create_router_chain()
+        self.chain = self.router.create_router_chain()
         self.rag_handler = RAGCallbackHandler()
 
     def initialize_components(self):
