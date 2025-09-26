@@ -24,6 +24,15 @@ class ChainRouter:
 
     def create_router_chain(self):
         """## 변경된 로직: 라우팅 로직을 @chain을 사용한 함수로 처리합니다."""
+        # 컨텍스트 프롬프트: 이전 대화 맥락 유지
+        contextualize_prompt = ChatPromptTemplate.from_messages([
+            ("system", "너는 대화 맥락을 반영해서 사용자의 현재 질문을 독립적인 형태로 재구성하는 도우미야."),
+            MessagesPlaceholder("history"),
+            ("human", "{input}")
+        ])
+
+        contextualizer_chain = contextualize_prompt | self.llm | StrOutputParser()
+
         # 라우터 프롬프트: 쿼리 의도 분류
         route_prompt = ChatPromptTemplate.from_template(
             """사용자의 질문을 분석하여, 질문의 의도를 다음 5가지 카테고리 중 하나로 분류하세요.
@@ -41,9 +50,17 @@ class ChainRouter:
 
         @chain
         def router_chain_optimized(input_dict):
-            """질문을 한번만 분류하고, 그 결과를 바탕으로 분기를 선택합니다."""
-            classification = route_chain.invoke({"input": input_dict["input"]})
+            """질문을 history 반영 후 한번만 분류하고, 그 결과를 바탕으로 분기를 선택합니다."""
+            recent_history = get_recent_history(input_dict.get("history", []))
+            refined_query = contextualizer_chain.invoke({
+                "input": input_dict["input"],
+                "history": recent_history
+            })
             
+            classification = route_chain.invoke({
+                "input": refined_query
+            })
+
             print(f"라우터 분류 결과: {classification.strip()}")
             
             if "metadata_search" in classification:
@@ -119,6 +136,46 @@ class ChainRouter:
         )
         
         return summarize_pipeline
+
+    def _create_specific_qa_chain(self):
+        """## 구체적 질문 답변 체인 (Route 3)"""
+        """
+        Default route QA chain.
+        - 다른 루트에서 처리하지 못한 질문을 담당 (fallback)
+        - 상세 정보 확인, 정보 부재 확인, 단순 사실 추출
+        """
+        def get_context(question: str) -> str:
+            docs = self.find_documents(question)
+            contexts = self.find_contexts(docs)
+            if not contexts:
+                return "관련된 컨텍스트가 없음"
+            return "\n\n".join(contexts)
+
+        prompt = ChatPromptTemplate.from_messages([
+            (
+            "system",
+            "너는 RFP 문서와 관련된 정보를 제공하는 AI 어시스턴트야.\n"
+            "역할:\n"
+            "1. 상세 정보가 있으면 구체적으로 빠짐없이 답해.\n"
+            "2. 문서에 정보가 없으면 '제공된 컨텍스트에 없음'이라고 명확히 말해.\n"
+            "3. 단순 사실 추출에 집중하고 불필요한 설명은 하지 마.\n"
+            "4. 추측하거나 지어내지 마.\n"
+            "이 루트는 다른 루트에서 처리하지 못한 질문을 처리하는 디폴트이기도 해."
+            ),
+            ("human", "질문: {question}\n\n컨텍스트:\n{context}")
+        ])
+
+        specific_qa_chain = (
+            {
+                "context": RunnablePassthrough() | get_context,
+                "question": RunnablePassthrough()
+            }
+            | prompt
+            | self.llm
+            | StrOutputParser()
+        )
+
+        return specific_qa_chain
 
     def _create_comparison_chain(self):
         """## [개선] 비교 분석 체인 (Route 4) - 리트리버 일원화"""
