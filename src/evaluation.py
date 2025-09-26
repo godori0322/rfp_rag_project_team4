@@ -53,13 +53,14 @@ def generate_ragas_dataset(test_questions_with_ground_truths: list[dict]):
     for item in test_questions_with_ground_truths:
         question = item['question']
         ground_truth = item['ground_truth']
-
         bot = Chatbot(user_id="ragas_eval_user")
-        bot_response = bot.ask(question, False)
-        bot_contexts = bot.find_contexts(bot.find_documents(question))
 
         print('======= chatbot_input ==========')
         print(question)
+
+        bot_response = bot.ask(question, False)
+        bot_contexts = bot.find_contexts(bot.find_documents(question))
+        
         print('======= chatbot_response ==========')
         print(bot_response)
         print('===================================')
