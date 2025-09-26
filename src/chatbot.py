@@ -79,7 +79,7 @@ class Chatbot:
                 AttributeInfo(name="summary", type="string", description="사업 요약"),
                 AttributeInfo(name="filename", type="string", description="파일명")
             ],
-            search_kwargs={"k": Config.TOP_K + 4},
+            search_kwargs={"k": Config.FIRST_TOP_K},
             verbose=True
         )
 
