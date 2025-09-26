@@ -117,42 +117,6 @@ class Chatbot:
     def find_contexts(self, docs):
         return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
 
-    # def create_chain(self):
-    #     def format_docs(docs):
-    #         return "\n\n".join(self.find_contexts(docs))
-    #     def format_debug_docs(docs):
-    #         ## return "\n(-------------------------------------)\n".join(docs)
-    #         return "\n(-------------------------------------)\n".join(f'[{doc.metadata["filename"]}]\n{doc.page_content}' for doc in docs)
-
-    #     def get_context(inputs):
-    #         question = inputs["input"]
-    #         docs = self.find_documents(question)
-    #         print(format_docs(docs))
-    #         return format_docs(docs)
-
-    #     prompt = ChatPromptTemplate.from_messages([
-    #         ("system", """당신은 B2G 입찰지원 전문 컨설팅 회사 '입찰메이트'의 최고 수준 AI 어시스턴트입니다.
-    #         당신의 주요 임무는 주어진 RFP(제안요청서) 문서 내용을 바탕으로 컨설턴트의 질문에 빠르고 정확하게 답변하는 것입니다.
-    #         **규칙:**
-    #         1.  **RFP 전문가의 말투 사용**: 답변은 항상 명확하고, 간결하며, 전문가적인 톤을 유지해야 합니다.
-    #         2.  **컨텍스트 기반 답변**: 제공된 `Context` 섹션의 내용만을 근거로 답변해야 합니다. 컨텍스트에 없는 내용은 절대로 추측하거나 만들어서는 안 됩니다.
-    #         3.  **정보 부족 시 명확한 고지**: 컨텍스트에서 질문에 대한 답을 찾을 수 없다면, "제공된 RFP 문서 내용만으로는 해당 정보를 확인할 수 없습니다."라고 명확하게 답변하세요.
-    #         4.  **핵심 정보 요약**: 답변 시에는 예산, 사업 기간, 주요 요구사항 등 핵심적인 정보를 우선적으로, 구조화하여(예: 항목별 리스트) 제공하는 것이 좋습니다.
-    #         5.  **한국어 답변**: 모든 답변은 반드시 한국어로 작성해야 합니다."""),
-    #         MessagesPlaceholder("history"),
-    #         ("human", "{input}\n\nContext:\n{context}")
-    #     ])
-
-    #     chain = (
-    #         RunnablePassthrough.assign(context=get_context)
-    #         | prompt
-    #         | self.llm
-    #         | StrOutputParser()
-    #     )
-    #     return chain.with_config(
-    #         {"callbacks": [self.tracer]}
-    #     )
-
     def ask(self, query: str, is_save=True) -> str:
         """사용자 질문에 답변합니다."""
         response = self.chain.invoke({
