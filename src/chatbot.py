@@ -38,7 +38,7 @@ class Chatbot:
         self.tracer = LangChainTracer(project_name=LangSmithConfig.LANGCHAIN_PROJECT)
         self.initialize_components()
         self.history = self.load_history()
-        router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer)
+        self.router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer)
         self.chain = router.create_router_chain()
         self.rag_handler = RAGCallbackHandler()
 
@@ -86,6 +86,12 @@ class Chatbot:
         reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
         compressor = CrossEncoderReranker(model=reranker_model, top_n=Config.TOP_K)
         self.retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
+
+    def find_documents(self, question):
+        return self.router.find_documents(question)
+    
+    def find_contexts(self, docs):
+        return self.router.find_contexts(docs)
 
     def load_history(self) -> list:
         if not os.path.exists(Config.HISTORY_PATH):
