@@ -23,7 +23,7 @@ class Config:
     # RAG 파라미터
     CHUNK_SIZE = 1000
     CHUNK_OVERLAP = 100
-    TOP_K = 5
+    TOP_K = 3
     TEMPERATURE = 0.2
 
 class LangSmithConfig:
