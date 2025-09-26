@@ -6,9 +6,12 @@ from langchain_openai import ChatOpenAI
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from typing import List, Dict
+from langchain_core.output_parsers import JsonOutputParser
 from langchain.schema.output_parser import StrOutputParser
 from langchain.chains.summarize import load_summarize_chain
 from langchain.schema import Document
+from langchain.chains.query_constructor.base import AttributeInfo
+from langchain.retrievers.self_query.base import SelfQueryRetriever
 
 class ChainRouter:
     def __init__(self, llm, retriever, vectorstore, tracer, find_documents_func, find_contexts_func):
@@ -117,38 +120,79 @@ class ChainRouter:
         
         return summarize_pipeline
 
-    def _create_specific_qa_chain(self):
-        """## 구체적 질의응답 체인 (Route 3)"""
-        # 변경된 로직: 프롬프트 변수명을 'input'과 'chat_history'로 변경
-        contextualize_prompt = ChatPromptTemplate.from_messages([
-            ("system", "과거 대화 내용을 바탕으로 다음 질문을 재구성하세요."),
-            MessagesPlaceholder("history"),
-            ("human", "{input}"),
-        ])
-        
-        history_aware_retriever = create_history_aware_retriever(self.llm, self.retriever, contextualize_prompt)
-        
-        qa_prompt = ChatPromptTemplate.from_template("""
-        당신은 B2G 입찰지원 전문 컨설턴트 챗봇입니다.
-        제공된 'Context'의 내용을 바탕으로 질문에 답변하세요.
-        
-        Context:
-        {context}
-        
-        질문: {input}
-        """)
-        
-        return create_retrieval_chain(history_aware_retriever, create_stuff_documents_chain(self.llm, qa_prompt))
-    
     def _create_comparison_chain(self):
-        """## 비교 분석 체인 (Route 4)"""
-        # 여러 문서를 찾아 LLM에 전달하여 비교 요청
-        comparison_prompt = ChatPromptTemplate.from_messages([
-            ("system", "제공된 여러 RFP 문서의 내용을 바탕으로 사용자의 비교 요청에 응답하세요."),
-            ("human", "문서 내용:\n{context}\n\n질문: {input}")
-        ])
+        """## [개선] 비교 분석 체인 (Route 4) - 리트리버 일원화"""
+
+        extraction_parser = JsonOutputParser()
+        extraction_prompt = ChatPromptTemplate.from_template(
+            """당신은 사용자의 복잡한 질문을 분석하여 구조화된 JSON으로 변환하는 전문 분석가입니다.
+            사용자의 질문에서 비교할 두 개의 대상(item_A, item_B)과 비교 기준(criteria)을 추출해야 합니다.
+            만약 기준이 명확하지 않다면 "전반적인 특징"이라고 답하십시오.
+            답변은 반드시 JSON 형식으로만 제공해야 합니다. 다른 설명은 절대 추가하지 마십시오.
+
+            사용자 질문: {input}
+            JSON 출력:
+            """
+        )
+        extraction_chain = extraction_prompt | self.llm | extraction_parser
+
+        # get_context_for_item_robust : 일원화된 메인 Retriever를 사용하여 각 아이템을 검색하는 함수
+        def get_context_for_item_robust(item_name: str) -> str:
+            """[개선] ChainRouter에 전달된 기본 self.retriever를 사용하여 검색하고, 실패 시 DB를 직접 확인합니다."""
+            print(f"--- INFO: '{item_name}'에 대한 메인 SelfQueryRetriever 검색 수행 ---")
+            
+            # Chatbot 클래스에서 생성되어 __init__을 통해 전달받은 self.retriever를 직접 사용
+            docs = self.retriever.invoke(item_name)
+            
+            if not docs:
+                print(f"--- WARNING: '{item_name}'에 대한 검색 실패 ---")
+                
+                # ### DEBUGGING BLOCK START ###
+                print("--- DEBUGGING: DB 데이터 샘플 직접 확인 ---")
+                try:
+                    # 벡터 DB에서 직접 메타데이터 샘플을 가져온다
+                    sample_data = self.vectorstore.get(limit=5, include=["metadatas"])
+                    sample_titles = [
+                        meta.get('project_title', '제목 없음') 
+                        for meta in sample_data.get('metadatas', [])
+                    ]
+                    print("DB에 저장된 프로젝트 제목 샘플:", sample_titles)
+                except Exception as e:
+                    print(f"DB 샘플 데이터 조회 중 오류 발생: {e}")
+                # ### DEBUGGING BLOCK END ###
+
+                return "관련 정보를 찾을 수 없습니다. (디버깅 정보가 콘솔에 출력되었습니다)"
+                
+            return "\n\n".join(self.find_contexts(docs))
+        
+        
+        comparison_prompt = ChatPromptTemplate.from_template(
+            """당신은 두 개의 사업(RFP) 정보를 받아서, 주어진 기준에 따라 명확하게 비교 분석하는 전문 컨설턴트입니다.
+
+            **비교 기준:** {criteria}
+
+            **[사업 A: {item_A}]**
+            {context_A}
+
+            **[사업 B: {item_B}]**
+            {context_B}
+
+            **지시사항:**
+            위 두 사업의 정보를 바탕으로, '비교 기준'에 맞춰 각각의 내용을 요약하고 비교 결과를 표(Markdown Table) 형식으로 명확하게 제시해주십시오.
+            만약 특정 정보를 찾을 수 없다면 "정보 확인 불가"라고 명시하세요.
+            """
+        )
+        
+        # 전체 체인 결합
         return (
-            RunnablePassthrough.assign(context=RunnableLambda(lambda x: self.find_contexts(self.find_documents(x['input']))))
+            RunnablePassthrough.assign(extracted_info=extraction_chain)
+            | RunnablePassthrough.assign(
+                item_A = lambda x: x["extracted_info"]["item_A"],
+                item_B = lambda x: x["extracted_info"]["item_B"],
+                criteria = lambda x: x["extracted_info"]["criteria"],
+                context_A=lambda x: get_context_for_item_robust(x["extracted_info"]["item_A"]),
+                context_B=lambda x: get_context_for_item_robust(x["extracted_info"]["item_B"])
+            )
             | comparison_prompt
             | self.llm
             | StrOutputParser()
@@ -157,7 +201,7 @@ class ChainRouter:
     def _create_recommendation_chain(self):
         """## 유사 사업 추천 체인 (Route 5) - [Query Expansion 적용]"""
 
-        # 1. 질의 확장(Query Expansion)을 위한 체인 정의
+        # Query Expansion 체인 정의
         query_expansion_prompt = ChatPromptTemplate.from_template(
             """당신은 사용자의 질문을 벡터 검색에 더 효과적인 키워드 목록으로 확장하는 전문가입니다.
             사용자의 원본 질문의 핵심 의미를 파악하여, 관련 동의어, 기술 용어, 상위 개념 등을 포함한 검색 키워드 3개를 쉼표(,)로 구분하여 생성하세요.
@@ -168,7 +212,7 @@ class ChainRouter:
 
         query_expansion_chain = query_expansion_prompt | self.llm | StrOutputParser()
 
-        # 2. 기존 추천 체인 로직 (헬퍼 함수 등)
+        # 헬퍼 함수
         def format_docs(docs: List[Document]) -> str:
             return "\n\n".join(
                 f"### 사업명: {doc.metadata.get('project_title', '제목 없음')}\n"
@@ -176,7 +220,7 @@ class ChainRouter:
                 f"요약:\n{doc.metadata.get('summary', doc.page_content)}"
                 for doc in docs
             )
-
+            
         recommendation_prompt = ChatPromptTemplate.from_template(
             """당신은 사용자의 요청에 기반하여 유사한 사업을 추천하고, 그 이유를 설명하는 B2G 입찰 전문 컨설턴트입니다.
 
@@ -193,16 +237,16 @@ class ChainRouter:
         
         mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
 
-        # 3. 전체 체인 결합
+        # 전체 체인 결합
         recommendation_chain = (
             {
-                # 'expanded_query' 키에 확장된 쿼리 결과를 할당
+                # expanded_query 키에 확장된 쿼리 결과를 할당
                 "expanded_query": query_expansion_chain,
-                # 'original_input' 키에 원본 사용자 입력을 그대로 유지
+                # original_input 키에 원본 사용자 입력을 그대로 유지
                 "original_input": (lambda x: x["input"])
             }
             | RunnablePassthrough.assign(
-                # 확장된 쿼리('expanded_query')를 사용해 문서를 검색하고, 그 결과를 'context'에 할당
+                # expanded_query로 문서를 검색하고 그 결과를 'context'에 할당함.
                 context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
             )
             | recommendation_prompt
