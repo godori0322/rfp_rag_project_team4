@@ -1,12 +1,14 @@
 # chain_router.py
+import json
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda, chain
 from langchain_openai import ChatOpenAI
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from typing import List, Dict
-#from langchain.schema.output_parser import StrOutputParser
-from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser
+from langchain.schema.output_parser import StrOutputParser
+from langchain.chains.summarize import load_summarize_chain
 from langchain.schema import Document
 from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.retrievers.self_query.base import SelfQueryRetriever
@@ -74,25 +76,49 @@ class ChainRouter:
         )
 
     def _create_summarization_chain(self):
-        """## 정보 요약 체인 (Route 2)"""
-        # 긴 문서를 처리하기 위해 map-reduce 방식 등을 고려할 수 있음
-        summarization_prompt = ChatPromptTemplate.from_messages([
-            ("system", "제공된 RFP 문서의 내용을 바탕으로 핵심 정보를 간결하게 요약하세요."),
-            ("human", "문서 내용:\n{context}")
-        ])
-        def find_contexts(x):
-            contexts = self.find_contexts(self.find_documents(x['input']))
-            for context in contexts:
-                print(context)
-                print()
-            return contexts
+        """## 변경된 로직: 정보 요약 체인 (Route 2) - LCEL 기반 Map-Reduce"""
         
-        return (
-            RunnablePassthrough.assign(context=RunnableLambda(find_contexts)) # lambda x: self.find_contexts(self.find_documents(x['input']))
-            | summarization_prompt
-            | self.llm
-            | StrOutputParser()
+        # 1. 검색 및 문서 분할 (get_documents_with_metadata는 기존 로직)
+        def get_documents_with_metadata(x):
+            docs = self.find_documents(x['input'])
+            # 메타데이터를 텍스트에 포함시켜 반환
+            docs = [Document(page_content=f"메타데이터: {json.dumps(doc.metadata, ensure_ascii=False, indent=2)}\n\n문서 내용: {doc.page_content}") for doc in docs]
+            for doc in docs:
+                print(f'{doc.page_content}\n')
+            return docs
+
+        # 2. Map 단계 프롬프트
+        map_prompt_template = """
+        다음은 RFP 문서의 일부 내용입니다. 이 내용에서 핵심 정보를 요약하세요.
+        ---
+        {text}
+        ---
+        요약:
+        """
+        map_prompt = ChatPromptTemplate.from_template(map_prompt_template)
+        map_chain = map_prompt | self.llm | StrOutputParser()
+
+        # 3. Reduce 단계 프롬프트
+        reduce_prompt_template = """
+        다음은 여러 문서 청크에 대한 요약본입니다. 이 요약들을 종합하여 하나의 최종 요약을 생성하세요.
+        최종 요약은 핵심 내용을 간결하고 명확하게 포함해야 합니다.
+        ---
+        {text}
+        ---
+        최종 요약:
+        """
+        reduce_prompt = ChatPromptTemplate.from_template(reduce_prompt_template)
+        reduce_chain = reduce_prompt | self.llm | StrOutputParser()
+        
+        # 4. 전체 파이프라인 결합
+        # 문서 검색 -> 각 문서를 요약(map) -> 요약들을 합쳐 최종 요약(reduce)
+        summarize_pipeline = (
+            RunnableLambda(get_documents_with_metadata)
+            | map_chain.map()  # 모든 문서에 대해 map_chain 실행
+            | reduce_chain      # map 결과를 reduce_chain에 전달
         )
+        
+        return summarize_pipeline
 
     def _create_comparison_chain(self):
         """## [개선] 비교 분석 체인 (Route 4) - 리트리버 일원화"""
