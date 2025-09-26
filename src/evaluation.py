@@ -63,14 +63,10 @@ def generate_ragas_dataset(test_questions_with_ground_truths: list[dict]):
             bot_contexts = bot.find_contexts(bot.find_documents(question))
         except Exception as e:
             print(f"첫 번째 시도 실패: {e}")
-            try:
-                print("두 번째 시도 (재호출)...")
-                bot_response = bot.ask(question, False)
-                bot_contexts = bot.find_contexts(bot.find_documents(question))
-                print("두 번째 시도 성공.")
-            except Exception as e:
-                print(f"두 번째 시도 실패: {e}")
-                print("재호출 실패. 처리를 중단합니다.")
+            print("두 번째 시도 (재호출)...")
+            bot_response = bot.ask(question, False)
+            bot_contexts = bot.find_contexts(bot.find_documents(question))
+            print("두 번째 시도 성공.")
 
         print('======= chatbot_response ==========')
         print(bot_response)
