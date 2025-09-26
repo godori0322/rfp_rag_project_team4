@@ -13,6 +13,7 @@ from langchain.schema import Document
 from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 
+
 class ChainRouter:
     def __init__(self, llm, retriever, vectorstore, tracer, find_documents_func, find_contexts_func):
         self.llm = llm

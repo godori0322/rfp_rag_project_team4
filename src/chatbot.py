@@ -1,5 +1,7 @@
 import os
 import json
+from typing import List, Dict
+from langsmith import Client
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -11,13 +13,14 @@ from langchain.chains.query_constructor.base import AttributeInfo
 from langchain_core.runnables import RunnablePassthrough, RunnableBranch, RunnableLambda, chain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from typing import List, Dict
-
-from chain_router import ChainRouter
-from langsmith import Client
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder # 리랭커 임포트
+from langchain.retrievers import ContextualCompressionRetriever # 압축 리트리버 임포트
+from langchain.retrievers.document_compressors import CrossEncoderReranker # 크로스 인코더 압축기 임포트
 from langchain.callbacks.tracers import LangChainTracer
+
 from config import Config, LangSmithConfig
 from rag_graph import RAGCallbackHandler
+from chain_router import ChainRouter
 
 
 class Chatbot:
@@ -59,7 +62,7 @@ class Chatbot:
         )
         self.llm = ChatOpenAI(model=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
 
-        self.retriever = SelfQueryRetriever.from_llm(
+        base_retriever = SelfQueryRetriever.from_llm(
             self.llm,
             self.vectorstore,
             document_contents="정부 및 공공기관에서 발주하는 RFP(제안요청서)의 상세 내용. 사업 개요, 예산, 기간, 제안 조건 등을 포함함.",
@@ -86,9 +89,13 @@ class Chatbot:
                 AttributeInfo(name="summary", type="string", description="사업 요약"),
                 AttributeInfo(name="filename", type="string", description="파일명")
             ],
-            search_kwargs={"k": Config.TOP_K},
+            search_kwargs={"k": Config.TOP_K + 10},
             verbose=True
         )
+
+        reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
+        compressor = CrossEncoderReranker(model=reranker_model, top_n=Config.TOP_K)
+        self.retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
 
     def load_history(self) -> list:
         if not os.path.exists(Config.HISTORY_PATH):
