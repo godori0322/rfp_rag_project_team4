@@ -4,7 +4,7 @@ import os
 import chromadb
 import pprint
 
-# [해결책] 스크립트의 현재 위치를 기준으로 상위 'src' 폴더를 파이썬 경로에 추가합니다.
+# 절대경로 설정
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from config import Config

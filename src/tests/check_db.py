@@ -1,6 +1,10 @@
 #check_db.py
 import chromadb
 from config import Config
+import sys
+
+# 절대경로 설정
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 def check_vector_db_status():
     """
