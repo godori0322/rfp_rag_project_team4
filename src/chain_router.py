@@ -13,14 +13,19 @@ from langchain.schema import Document
 from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 
+
 class ChainRouter:
-    def __init__(self, llm, retriever, vectorstore, tracer, find_documents_func, find_contexts_func):
+    def __init__(self, llm, retriever, vectorstore, tracer):
         self.llm = llm
         self.retriever = retriever
         self.vectorstore = vectorstore
         self.tracer = tracer
-        self.find_documents = find_documents_func
-        self.find_contexts = find_contexts_func
+
+    def find_documents(self, question):
+        return self.retriever.get_relevant_documents(question)
+    
+    def find_contexts(self, docs):
+        return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
 
     def get_recent_history(self, history, window_size=5):
         return history[-window_size:] if history else []
