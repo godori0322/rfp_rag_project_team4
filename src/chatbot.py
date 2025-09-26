@@ -34,22 +34,12 @@ class Chatbot:
         LangSmithConfig.validate_config()
         
         # Initialize LangSmith client with explicit API key
-        self.langsmith_client = Client(
-            api_key=LangSmithConfig.LANGCHAIN_API_KEY,
-            api_url=LangSmithConfig.LANGCHAIN_ENDPOINT
-        )
-        
-        self.tracer = LangChainTracer(
-            project_name=LangSmithConfig.LANGCHAIN_PROJECT
-        )
-
+        self.langsmith_client = Client(api_key=LangSmithConfig.LANGCHAIN_API_KEY, api_url=LangSmithConfig.LANGCHAIN_ENDPOINT)        
+        self.tracer = LangChainTracer(project_name=LangSmithConfig.LANGCHAIN_PROJECT)
         self.initialize_components()
         self.history = self.load_history()
-        router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer,
-            find_documents_func=self.find_documents, find_contexts_func=self.find_contexts
-        )
+        router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer)
         self.chain = router.create_router_chain()
-        #self.chain = self.create_router_chain() # self.create_chain()
         self.rag_handler = RAGCallbackHandler()
 
     def initialize_components(self):
@@ -117,12 +107,6 @@ class Chatbot:
                 else {'type': 'ai', 'content': msg.content} for msg in self.history
             ]
             json.dump(history_json, f, ensure_ascii=False, indent=4)
-
-    def find_documents(self, question):
-        return self.retriever.get_relevant_documents(question)
-    
-    def find_contexts(self, docs):
-        return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
 
     def ask(self, query: str, is_save=True) -> str:
         """사용자 질문에 답변합니다."""
