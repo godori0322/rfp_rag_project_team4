@@ -39,12 +39,12 @@ class ChainRouter:
         # 라우터 프롬프트: 쿼리 의도 분류
         route_prompt = ChatPromptTemplate.from_template(
             """사용자의 질문을 분석하여, 질문의 의도를 다음 5가지 카테고리 중 하나로 분류하세요.
-            `metadata_search`: 특정 조건(기관, 사업명 등)으로 문서를 찾아달라는 요청.
+            `general`: RFP 문서와 관련 없는 일반적인 질문 (인사, 농담, 상식 등).
             `summarization`: 문서의 핵심 내용을 요약해달라는 요청.
-            `specific_qa`: 단일 문서에 대한 구체적인 정보(사실, 수치)를 묻는 질문.
             `comparison`: 두 개 이상의 문서나 항목을 비교해달라는 요청.
             `recommendation`: 특정 사업과 유사한 다른 사업을 추천해달라는 요청.
-            
+            `default_qa`: RFP 문서 내용에 대한 구체적인 질문 또는 위 카테고리에 속하지 않는 모든 RFP 관련 질문.
+
             질문: {input}
             분류:"""
         )
@@ -64,39 +64,86 @@ class ChainRouter:
                 "input": refined_query
             })
 
-            print(f"라우터 분류 결과: {classification.strip()}")
+            print(f"✅ 라우터 분류 결과: {classification.strip()}")
             
-            if "metadata_search" in classification:
-                return self._create_metadata_search_chain()
+            if "general" in classification:
+                return self._create_general_chain()
             elif "summarization" in classification:
                 return self._create_summarization_chain()
-            elif "specific_qa" in classification:
-                return self._create_specific_qa_chain()
             elif "comparison" in classification:
                 return self._create_comparison_chain()
             elif "recommendation" in classification:
                 return self._create_recommendation_chain()
-            else:
-                return self._create_specific_qa_chain()
+            else: # default_qa 및 기타 모든 경우
+                return self._create_default_qa_chain()
 
         return router_chain_optimized.with_config(
             {"callbacks": [self.tracer]}
         )
 
-    def _create_metadata_search_chain(self):
-        """## 메타데이터 검색 체인 (Route 1)"""
+    def _create_general_chain(self):
+        """## 일반 대화 체인 (Route 1)"""
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. RFP 문서가 아닌 일반적인 주제에 대해 답변해줘."),
+            ("human", "{input}")
+        ])
+        return prompt | self.llm | StrOutputParser()
+
+    def _create_default_qa_chain(self):
+        """## RFP 관련 기본 QA 체인 (Route 2, Fallback Route) - 메타데이터 참조 강화"""
+        
+        def get_context_with_metadata(question: str) -> str:
+            """질문과 관련된 문서를 검색하고, 각 문서의 메타데이터와 본문을 결합하여 컨텍스트를 생성합니다."""
+            # 1. 질문을 기반으로 관련 문서를 검색합니다.
+            docs = self.find_documents(question)
+            if not docs:
+                return "관련된 문서를 찾을 수 없습니다."
+
+            # 2. 각 문서의 내용과 메타데이터를 결합하여 컨텍스트 문자열 리스트를 생성합니다.
+            context_parts = []
+            for doc in docs:
+                # 메타데이터를 JSON 형식으로 보기 좋게 변환합니다.
+                metadata_str = json.dumps(doc.metadata, ensure_ascii=False, indent=2)
+                # LLM이 문서의 정보와 본문을 명확히 구분할 수 있도록 형식을 지정합니다.
+                part = (
+                    f"--- 문서 시작 ---\n"
+                    f"[문서 정보]:\n{metadata_str}\n\n"
+                    f"[문서 본문]:\n{doc.page_content}\n"
+                    f"--- 문서 종료 ---"
+                )
+                context_parts.append(part)
+            
+            # 3. 모든 컨텍스트 부분을 하나의 문자열로 결합하여 반환합니다.
+            return "\n\n".join(context_parts)
+
+        # LLM에게 역할을 부여하고, 메타데이터 활용법을 명시적으로 지시하는 프롬프트
+        prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "너는 RFP 문서 기반 질의응답 AI 어시턴트야.\n"
+                "주어진 컨텍스트는 여러 문서로 구성되어 있으며, 각 문서는 [문서 정보]와 [문서 본문]으로 나뉘어 있어.\n\n"
+                "**답변 생성 규칙:**\n"
+                "1. 사용자의 질문에 가장 관련 있는 [문서 본문]의 내용을 찾아 답변의 근거로 삼아야 해.\n"
+                "2. 답변의 출처를 명확히 하기 위해, 근거로 사용한 문서의 [문서 정보]에 있는 'project_title'이나 'rfp_number'를 반드시 언급해야 해. (예: 'OO 사업(공고번호: 123)에 따르면...')\n"
+                "3. 만약 컨텍스트에서 질문과 관련된 정보를 찾을 수 없다면, '제공된 문서에서 관련 정보를 찾을 수 없습니다.'라고 명확히 답변해야 해.\n"
+                "4. 절대로 추측하거나 컨텍스트에 없는 정보를 지어내면 안 돼.\n"
+            ),
+            ("human", "질문: {question}\n\n[컨텍스트]:\n{context}")
+        ])
+
+        # 체인 구성: 입력(질문) -> 컨텍스트 생성 -> 프롬프트 조합 -> LLM 답변 -> 문자열 출력
         return (
-            RunnablePassthrough.assign(docs=RunnableLambda(self.find_documents))
-            | RunnableLambda(
-                lambda x: "다음은 검색된 RFP 문서 목록입니다.\n\n" + "\n\n".join([
-                    f"- {doc.metadata.get('project_title', '제목 없음')} (공고번호: {doc.metadata.get('rfp_number', '미상')})"
-                    for doc in x['docs']
-                ])
-            )
+            {
+                "context": lambda x: get_context_with_metadata(x["input"]),
+                "question": lambda x: x["input"]
+            }
+            | prompt
+            | self.llm
+            | StrOutputParser()
         )
 
     def _create_summarization_chain(self):
-        """## 변경된 로직: 정보 요약 체인 (Route 2) - LCEL 기반 Map-Reduce"""
+        """## 변경된 로직: 정보 요약 체인 (Route 3) - LCEL 기반 Map-Reduce"""
         
         # 1. 검색 및 문서 분할 (get_documents_with_metadata는 기존 로직)
         def get_documents_with_metadata(x):
@@ -139,46 +186,6 @@ class ChainRouter:
         )
         
         return summarize_pipeline
-
-    def _create_specific_qa_chain(self):
-        """## 구체적 질문 답변 체인 (Route 3)"""
-        """
-        Default route QA chain.
-        - 다른 루트에서 처리하지 못한 질문을 담당 (fallback)
-        - 상세 정보 확인, 정보 부재 확인, 단순 사실 추출
-        """
-        def get_context(question: str) -> str:
-            docs = self.find_documents(question)
-            contexts = self.find_contexts(docs)
-            if not contexts:
-                return "관련된 컨텍스트가 없음"
-            return "\n\n".join(contexts)
-
-        prompt = ChatPromptTemplate.from_messages([
-            (
-            "system",
-            "너는 RFP 문서와 관련된 정보를 제공하는 AI 어시스턴트야.\n"
-            "역할:\n"
-            "1. 상세 정보가 있으면 구체적으로 빠짐없이 답해.\n"
-            "2. 문서에 정보가 없으면 '제공된 컨텍스트에 없음'이라고 명확히 말해.\n"
-            "3. 단순 사실 추출에 집중하고 불필요한 설명은 하지 마.\n"
-            "4. 추측하거나 지어내지 마.\n"
-            "이 루트는 다른 루트에서 처리하지 못한 질문을 처리하는 디폴트이기도 해."
-            ),
-            ("human", "질문: {question}\n\n컨텍스트:\n{context}")
-        ])
-
-        specific_qa_chain = (
-            {
-                "context": RunnablePassthrough() | get_context,
-                "question": RunnablePassthrough()
-            }
-            | prompt
-            | self.llm
-            | StrOutputParser()
-        )
-
-        return specific_qa_chain
 
     def _create_comparison_chain(self):
         """## [개선] 비교 분석 체인 (Route 4) - 리트리버 일원화"""
