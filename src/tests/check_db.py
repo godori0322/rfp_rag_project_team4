@@ -2,6 +2,7 @@
 import chromadb
 from config import Config
 import sys
+import os
 
 # 절대경로 설정
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
