@@ -8,7 +8,7 @@ from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import (
     Faithfulness,
     AnswerCorrectness,
-    ContextRelevancy,
+    ContextRelevance,
     ContextRecall,
     ContextPrecision,
 )
@@ -36,8 +36,8 @@ ragas_embeddings = OpenAIEmbeddings(client=openai_client, model="text-embedding-
 # RAGAS 메트릭 초기화
 metrics = [
     # --- Retrieval Evaluation ---
-    # ContextRelevancy: Is the retrieved context relevant to the question?
-    ContextRelevancy(), 
+    # ContextRelevance: Is the retrieved context relevant to the question?
+    ContextRelevance(), 
     # ContextPrecision: Is the context useful for answering (signal-to-noise)?
     ContextPrecision(),
     # ContextRecall: Does the context contain all necessary info from the ground truth?

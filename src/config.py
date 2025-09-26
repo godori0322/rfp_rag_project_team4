@@ -16,13 +16,15 @@ class Config:
     EMBEDDING_MODEL = "text-embedding-3-small"
     # EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
     LLM_MODEL = "gpt-4o-mini"
+    RERANK_MODEL = 'BAAI/bge-reranker-base'
     RFP_COLLECTION = 'rfp_documents'
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
     # RAG 파라미터
     CHUNK_SIZE = 1000
     CHUNK_OVERLAP = 100
-    TOP_K = 5
+    FIRST_TOP_K = 7
+    TOP_K = 3
     TEMPERATURE = 0.2
 
 class LangSmithConfig:
