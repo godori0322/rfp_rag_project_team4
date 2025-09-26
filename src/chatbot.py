@@ -69,9 +69,21 @@ class Chatbot:
             AttributeInfo(name="project_title", type="string", description="사업명"),
             AttributeInfo(name="budget_krw", type="integer", description="사업 금액"),
             AttributeInfo(name="agency", type="string", description="발주 기관"),
-            AttributeInfo(name="publish_date", type="string", description="공개 일자 (YYYY-MM-DD 형식의 문자열)"),
-            AttributeInfo(name="bid_start_date", type="string", description="입찰 참여 시작일 (YYYY-MM-DD 형식의 문자열)"),
-            AttributeInfo(name="bid_end_date", type="string", description="입찰 참여 마감일 (YYYY-MM-DD 형식의 문자열)"),
+             AttributeInfo(
+                    name="publish_date", 
+                    type="string", 
+                    description="공개 일자. 공고가 공개된 날짜. YYYYMMDD 형식의 정수값입니다. 예를 들어, '2024년 1월 1일'은 20240101로 변환해야 합니다."
+                ),
+                AttributeInfo(
+                    name="bid_start_date", 
+                    type="string", 
+                    description="입찰 참여 시작일. 입찰 참여가 시작되는 날짜. YYYYMMDD 형식의 정수값입니다. 예를 들어, '2023년 12월 25일'은 20231225로 변환해야 합니다."
+                ),
+                AttributeInfo(
+                    name="bid_end_date", 
+                    type="string", 
+                    description="입찰 참여 마감일. 입찰 참여가 마감되는 날짜. YYYYMMDD 형식의 정수값입니다. 예를 들어, '작년'이나 '2023년 이후' 같은 표현도 YYYYMMDD 정수 형식으로 바꿔서 비교해야 합니다."
+                ),
             AttributeInfo(name="summary", type="string", description="사업 요약"),
             AttributeInfo(name="filename", type="string", description="파일명")
         ]
