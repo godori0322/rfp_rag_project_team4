@@ -22,6 +22,9 @@ class ChainRouter:
         self.find_documents = find_documents_func
         self.find_contexts = find_contexts_func
 
+    def get_recent_history(history, window_size=5):
+        return history[-window_size:] if history else []
+
     def create_router_chain(self):
         """## 변경된 로직: 라우팅 로직을 @chain을 사용한 함수로 처리합니다."""
         # 컨텍스트 프롬프트: 이전 대화 맥락 유지
