@@ -12,7 +12,6 @@ from langchain_core.runnables import RunnablePassthrough, RunnableBranch, Runnab
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from typing import List, Dict
-
 from chain_router import ChainRouter
 from langsmith import Client
 from langchain.callbacks.tracers import LangChainTracer
@@ -42,43 +41,59 @@ class Chatbot:
 
         self.initialize_components()
         self.history = self.load_history()
-        router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer,
-            find_documents_func=self.find_documents, find_contexts_func=self.find_contexts
+        
+        # --- FIX: Pass metadata info to ChainRouter ---
+        self.chain_router = ChainRouter(
+            llm=self.llm,
+            retriever=self.retriever,
+            vectorstore=self.vectorstore,
+            tracer=self.tracer,
+            find_documents_func=self.find_documents,
+            find_contexts_func=self.find_contexts,
+            metadata_field_info=self.metadata_field_info, # Pass the info
+            document_content_description=self.document_content_description # Pass the info
         )
-        self.chain = router.create_router_chain()
+        self.chain = self.chain_router.create_router_chain()
         #self.chain = self.create_router_chain() # self.create_chain()
         self.rag_handler = RAGCallbackHandler()
 
     def initialize_components(self):
+        """Initializes the core components like LLM, embeddings, and retriever."""
         self.embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL)
-        self.vectorstore = Chroma(persist_directory=Config.VECTOR_DB_PATH, embedding_function=self.embeddings, collection_name=Config.RFP_COLLECTION)
-        self.llm = ChatOpenAI(
-            model_name=Config.LLM_MODEL, 
-            temperature=Config.TEMPERATURE,
-            callbacks=[self.tracer]
+        self.vectorstore = Chroma(
+            persist_directory=Config.VECTOR_DB_PATH,
+            embedding_function=self.embeddings,
+            collection_name=Config.RFP_COLLECTION
         )
+        self.llm = ChatOpenAI(model=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
+
+        # This description is passed to the retriever
+        document_contents = "정부 및 공공기관에서 발주하는 RFP(제안요청서)의 상세 내용. 사업 개요, 예산, 기간, 제안 조건 등을 포함함."
+        
+        self.metadata_field_info = [
+            AttributeInfo(name="rfp_number", type="string", description="공고 번호"),
+            AttributeInfo(name="project_title", type="string", description="사업명"),
+            AttributeInfo(name="budget_krw", type="integer", description="사업 금액"),
+            AttributeInfo(name="agency", type="string", description="발주 기관"),
+            AttributeInfo(name="publish_date", type="string", description="공개 일자 (YYYY-MM-DD)"),
+            AttributeInfo(name="bid_start_date", type="string", description="입찰 참여 시작일 (YYYY-MM-DD)"),
+            AttributeInfo(name="bid_end_date", type="string", description="입찰 참여 마감일 (YYYY-MM-DD)"),
+            AttributeInfo(name="summary", type="string", description="사업 요약"),
+            AttributeInfo(name="filename", type="string", description="파일명")
+        ]
+
+        # --- FIX: Use the correct argument name 'document_contents' ---
         self.retriever = SelfQueryRetriever.from_llm(
-            llm=self.llm,
-            vectorstore=self.vectorstore,
-            document_contents="정부 및 공공기관에서 발주하는 RFP(제안요청서)의 상세 내용. 사업 개요, 예산, 기간, 제안 조건 등을 포함함. ",
-            metadata_field_info=[
-                AttributeInfo(name="rfp_number", type="string", description="공고 번호"),
-                AttributeInfo(name="project_title", type="string", description="사업명"),
-                AttributeInfo(name="budget_krw", type="integer", description="사업 금액"),
-                AttributeInfo(name="agency", type="string", description="발주 기관"),
-                AttributeInfo(name="publish_date", type="date", description="공개 일자"),
-                AttributeInfo(name="bid_start_date", type="date", description="입찰 참여 시작일"),
-                AttributeInfo(name="bid_end_date", type="date", description="입찰 참여 마감일"),
-                AttributeInfo(name="summary", type="string", description="사업 요약"),
-                AttributeInfo(name="filename", type="string", description="파일명")
-            ],
-            search_kwargs={"k": Config.TOP_K}, # "search_type": "mmr", "fetch_k": 20, "lambda_mult": 0.5
-            verbose=True  # 쿼리 파싱 과정을 확인하려면 True로 설정
-        )        
-        # self.retriever = self.vectorstore.as_retriever(
-        #     # search_type="similarity",  # search_kwargs={"k": Config.TOP_K}
-        #     search_type="mmr", search_kwargs={"k": Config.TOP_K, "fetch_k": 20, "lambda_mult": 0.5}
-        # )
+            self.llm,
+            self.vectorstore,
+            document_contents, # Correct positional argument
+            metadata_field_info=self.metadata_field_info,
+            search_kwargs={"k": Config.TOP_K},
+            verbose=True
+        )
+
+        # We still need this for the ChainRouter, so we store it on self
+        self.document_content_description = document_contents
 
     def load_history(self) -> list:
         if not os.path.exists(Config.HISTORY_PATH):
@@ -160,5 +175,4 @@ class Chatbot:
         
         if is_save:
             self.save_history()
-
         return str(answer)

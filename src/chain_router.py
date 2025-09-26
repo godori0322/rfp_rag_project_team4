@@ -1,21 +1,43 @@
-# chain_router.py
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda, chain
-from langchain_openai import ChatOpenAI
+from typing import List, Dict, Any
+from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda, RunnableBranch, chain
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain.chains import create_history_aware_retriever
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from typing import List, Dict
-from langchain.schema.output_parser import StrOutputParser
-from langchain.schema import Document
+from langchain.chains.query_constructor.base import (
+    get_query_constructor_prompt,
+    load_query_constructor_runnable,
+)
 
 class ChainRouter:
-    def __init__(self, llm, retriever, vectorstore, tracer, find_documents_func, find_contexts_func):
+    # --- FIX: Update __init__ to accept metadata info ---
+    def __init__(self, llm, retriever, vectorstore, tracer, find_documents_func, find_contexts_func, metadata_field_info, document_content_description):
         self.llm = llm
         self.retriever = retriever
         self.vectorstore = vectorstore
         self.tracer = tracer
         self.find_documents = find_documents_func
         self.find_contexts = find_contexts_func
+        # Store the info passed from the Chatbot class
+        self.metadata_field_info = metadata_field_info
+        self.document_content_description = document_content_description
+        # Now create the filter chain
+        self.metadata_filter_chain = self._create_metadata_filter_chain()
+
+    def _create_metadata_filter_chain(self):
+        """Creates a chain that translates a natural language query into a metadata filter."""
+        # --- FIX: Use the attributes stored on self ---
+        prompt = get_query_constructor_prompt(
+            self.document_content_description,
+            self.metadata_field_info,
+        )
+        return load_query_constructor_runnable(
+            self.llm,
+            self.document_content_description,
+            self.metadata_field_info,
+            enable_limit=False 
+        )
 
     def create_router_chain(self):
         """## 변경된 로직: 라우팅 로직을 @chain을 사용한 함수로 처리합니다."""
@@ -41,34 +63,88 @@ class ChainRouter:
             
             print(f"라우터 분류 결과: {classification.strip()}")
             
+            # This part is tricky. The @chain decorator will execute the returned runnable
+            # with the original input_dict. We need to make sure the sub-chains can handle it.
             if "metadata_search" in classification:
-                return self._create_metadata_search_chain()
+                # The metadata search chain needs to be invoked with the original input
+                return self._create_metadata_search_chain().invoke(input_dict)
             elif "summarization" in classification:
-                return self._create_summarization_chain()
+                return self._create_summarization_chain().invoke(input_dict)
             elif "specific_qa" in classification:
-                return self._create_specific_qa_chain()
+                # This chain handles history, so it needs the full dictionary
+                return self._create_specific_qa_chain().invoke(input_dict)
             elif "comparison" in classification:
-                return self._create_comparison_chain()
+                return self._create_comparison_chain().invoke(input_dict)
             elif "recommendation" in classification:
-                return self._create_recommendation_chain()
+                return self._create_recommendation_chain().invoke(input_dict)
             else:
-                return self._create_specific_qa_chain()
+                # Default to specific QA
+                return self._create_specific_qa_chain().invoke(input_dict)
 
         return router_chain_optimized.with_config(
             {"callbacks": [self.tracer]}
         )
 
     def _create_metadata_search_chain(self):
-        """## 메타데이터 검색 체인 (Route 1)"""
+        """IMPROVED Metadata Search Chain using a dedicated filter."""
+        def direct_metadata_search(input_dict: Dict[str, Any]) -> List[Document]:
+            # Map the 'input' key from the main chain to the 'query' key this chain expects
+            query = input_dict.get("input", "")
+            if not query:
+                return []
+            
+            # Invoke the filter generation chain
+            constructor_output = self.metadata_filter_chain.invoke({"query": query})
+            
+            # --- FIX: Access the .filter attribute, not .get("filter") ---
+            # The output is a StructuredQuery object, not a dictionary.
+            metadata_filter = constructor_output.filter
+            
+            print(f"Generated Metadata Filter: {metadata_filter}")
+
+            if metadata_filter:
+                # Use the generated filter to query ChromaDB directly
+                results = self.vectorstore.get(where=metadata_filter)
+                if results and results.get("documents"):
+                    # Reconstruct Document objects from the raw results
+                    return [
+                        Document(page_content=doc, metadata=meta)
+                        for doc, meta in zip(results["documents"], results["metadatas"])
+                    ]
+            return []
+
         return (
-            RunnablePassthrough.assign(docs=RunnableLambda(self.find_documents))
-            | RunnableLambda(
-                lambda x: "다음은 검색된 RFP 문서 목록입니다.\n\n" + "\n\n".join([
-                    f"- {doc.metadata.get('project_title', '제목 없음')} (공고번호: {doc.metadata.get('rfp_number', '미상')})"
-                    for doc in x['docs']
-                ])
-            )
+            RunnableLambda(direct_metadata_search)
+            | RunnableLambda(self._format_metadata_results_from_docs)
         )
+    
+    def _format_metadata_results_from_docs(self, docs: List[Document]) -> str:
+        """Formats a list of Document objects into a user-friendly string."""
+        if not docs:
+            return "검색 결과가 없습니다."
+
+        doc_list = []
+        for doc in docs:
+            meta = doc.metadata
+            # Format budget with commas for readability, handle if not present
+            try:
+                budget = int(meta.get('budget_krw', 0))
+                budget_str = f"{budget:,}원" if budget > 0 else "정보 없음"
+            except (ValueError, TypeError):
+                budget_str = "정보 없음"
+
+            # Build a detailed, formatted string for each document
+            doc_info = f"""### {meta.get('project_title', '제목 없음')}
+- **공고번호**: {meta.get('rfp_number', '정보 없음')}
+- **발주기관**: {meta.get('agency', '정보 없음')}
+- **사업예산**: {budget_str}
+- **공고일**: {meta.get('publish_date', '정보 없음')}
+- **입찰마감일**: {meta.get('bid_end_date', '정보 없음')}
+- **파일명**: {meta.get('filename', '정보 없음')}
+- **요약**: {meta.get('summary', '내용 없음')}"""
+            doc_list.append(doc_info)
+
+        return "다음은 검색된 RFP 문서 목록입니다.\n\n" + "\n\n---\n\n".join(doc_list)
 
     def _create_summarization_chain(self):
         """## 정보 요약 체인 (Route 2)"""
