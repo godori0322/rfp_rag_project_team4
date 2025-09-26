@@ -183,6 +183,7 @@ class ChainRouter:
     def _create_comparison_chain(self):
         """## [개선] 비교 분석 체인 (Route 4) - 리트리버 일원화"""
 
+        # 1단계: 비교 대상 및 기준 추출 체인
         extraction_parser = JsonOutputParser()
         extraction_prompt = ChatPromptTemplate.from_template(
             """당신은 사용자의 복잡한 질문을 분석하여 구조화된 JSON으로 변환하는 전문 분석가입니다.
@@ -196,12 +197,12 @@ class ChainRouter:
         )
         extraction_chain = extraction_prompt | self.llm | extraction_parser
 
-        # get_context_for_item_robust : 일원화된 메인 Retriever를 사용하여 각 아이템을 검색하는 함수
+        # 2단계: 일원화된 메인 Retriever를 사용하여 각 아이템을 검색하는 함수
         def get_context_for_item_robust(item_name: str) -> str:
             """[개선] ChainRouter에 전달된 기본 self.retriever를 사용하여 검색하고, 실패 시 DB를 직접 확인합니다."""
             print(f"--- INFO: '{item_name}'에 대한 메인 SelfQueryRetriever 검색 수행 ---")
             
-            # Chatbot 클래스에서 생성되어 __init__을 통해 전달받은 self.retriever를 직접 사용
+            # Chatbot 클래스에서 생성되어 __init__을 통해 전달받은 self.retriever를 직접 사용합니다.
             docs = self.retriever.invoke(item_name)
             
             if not docs:
@@ -210,7 +211,7 @@ class ChainRouter:
                 # ### DEBUGGING BLOCK START ###
                 print("--- DEBUGGING: DB 데이터 샘플 직접 확인 ---")
                 try:
-                    # 벡터 DB에서 직접 메타데이터 샘플을 가져온다
+                    # 벡터 DB에서 직접 메타데이터 샘플을 가져옵니다.
                     sample_data = self.vectorstore.get(limit=5, include=["metadatas"])
                     sample_titles = [
                         meta.get('project_title', '제목 없음') 
@@ -225,7 +226,7 @@ class ChainRouter:
                 
             return "\n\n".join(self.find_contexts(docs))
         
-        
+        # 3단계: 종합 비교를 위한 프롬프트
         comparison_prompt = ChatPromptTemplate.from_template(
             """당신은 두 개의 사업(RFP) 정보를 받아서, 주어진 기준에 따라 명확하게 비교 분석하는 전문 컨설턴트입니다.
 
@@ -257,6 +258,7 @@ class ChainRouter:
             | self.llm
             | StrOutputParser()
         )
+
 
     def _create_recommendation_chain(self):
         """## 유사 사업 추천 체인 (Route 5) - [Query Expansion 적용]"""

@@ -1,6 +1,13 @@
+#browse_db.py
+import sys
+import os
 import chromadb
-from config import Config
 import pprint
+
+# [해결책] 스크립트의 현재 위치를 기준으로 상위 'src' 폴더를 파이썬 경로에 추가합니다.
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from config import Config
 
 def browse_vector_db(limit: int = 10):
     """
