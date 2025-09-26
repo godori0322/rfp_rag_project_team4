@@ -1,6 +1,10 @@
 import streamlit as st
 from chatbot import Chatbot  # src/main.py -> chatbot.py
 from langchain_core.messages import HumanMessage, AIMessage
+from style import apply_custom_css  
+
+# css 설정 관련
+apply_custom_css()  # 2. 가져온 함수를 실행하여 스타일을 적용합니다.
 
 # --- 1. 페이지 설정 ---
 st.set_page_config(
@@ -19,20 +23,31 @@ if "messages" not in st.session_state:
 
 # --- 3. 사이드바: 사용자 인증 및 세션 시작 ---
 with st.sidebar:
-    st.image("https://i.imgur.com/g055F5d.png", width=250)
+    st.image("data/image/rogo.png", width=250)
     st.header("입찰메이트 🤝")
     st.markdown("RFP 문서 기반 질의응답 시스템")
     st.divider()
 
-    user_id_input = st.text_input("사용자 ID를 입력하세요.", key="user_id_input")
+    # st.form을 생성하여 입력 필드와 버튼을 묶습니다.
+    with st.form(key="session_form"):
+        user_id_input = st.text_input(
+            "사용자 ID를 입력하세요.", 
+            key="user_id_input",
+            placeholder="아이디 입력 후 Enter" # 사용자 편의를 위한 안내 문구
+        )
+        
+        # st.button 대신 st.form_submit_button을 사용합니다.
+        submit_button = st.form_submit_button(
+            label="세션 시작/전환", 
+            use_container_width=True
+        )
 
-    if st.button("세션 시작/전환", use_container_width=True):
+    # 폼이 제출되었을 때 (버튼 클릭 또는 Enter) 아래 로직을 실행합니다.
+    if submit_button:
         if user_id_input:
             st.session_state.user_id = user_id_input
-            # Chatbot 인스턴스를 생성하면 __init__에서 자동으로 히스토리를 로드합니다.
             st.session_state.chatbot = Chatbot(st.session_state.user_id)
             
-            # UI에 표시할 메시지 목록을 생성합니다.
             st.session_state.messages = []
             for msg in st.session_state.chatbot.history:
                 if isinstance(msg, HumanMessage):
@@ -41,10 +56,10 @@ with st.sidebar:
                     st.session_state.messages.append({"role": "assistant", "content": msg.content})
             
             st.success(f"'{st.session_state.user_id}'님, 안녕하세요! 이전 대화 기록을 불러왔습니다.")
-            # st.rerun()을 호출하여 메인 화면을 즉시 새로고침합니다.
             st.rerun() 
         else:
             st.error("사용자 ID를 입력해야 합니다.")
+
     st.divider()
     st.caption("© 2025 입찰메이트 Engineering Team.")
 
