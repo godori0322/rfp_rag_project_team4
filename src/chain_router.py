@@ -22,7 +22,7 @@ class ChainRouter:
         self.find_documents = find_documents_func
         self.find_contexts = find_contexts_func
 
-    def get_recent_history(history, window_size=5):
+    def get_recent_history(self, history, window_size=5):
         return history[-window_size:] if history else []
 
     def create_router_chain(self):
@@ -54,7 +54,7 @@ class ChainRouter:
         @chain
         def router_chain_optimized(input_dict):
             """질문을 history 반영 후 한번만 분류하고, 그 결과를 바탕으로 분기를 선택합니다."""
-            recent_history = get_recent_history(input_dict.get("history", []))
+            recent_history = self.get_recent_history(input_dict.get("history", []))
             refined_query = contextualizer_chain.invoke({
                 "input": input_dict["input"],
                 "history": recent_history
