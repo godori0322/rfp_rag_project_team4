@@ -50,35 +50,42 @@ class Chatbot:
         self.rag_handler = RAGCallbackHandler()
 
     def initialize_components(self):
+        """Initializes the core components like LLM, embeddings, and retriever."""
         self.embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL)
-        self.vectorstore = Chroma(persist_directory=Config.VECTOR_DB_PATH, embedding_function=self.embeddings, collection_name=Config.RFP_COLLECTION)
-        self.llm = ChatOpenAI(
-            model_name=Config.LLM_MODEL, 
-            temperature=Config.TEMPERATURE,
-            callbacks=[self.tracer]
+        self.vectorstore = Chroma(
+            persist_directory=Config.VECTOR_DB_PATH,
+            embedding_function=self.embeddings,
+            collection_name=Config.RFP_COLLECTION
         )
+        self.llm = ChatOpenAI(model=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
+
+        document_contents = "정부 및 공공기관에서 발주하는 RFP(제안요청서)의 상세 내용. 사업 개요, 예산, 기간, 제안 조건 등을 포함함."
+        
+        # --- FIX: Change date types from 'date' to 'string' ---
+        # This ensures the LLM generates simple string comparisons that ChromaDB can handle.
+        # The YYYY-MM-DD format is crucial for correct string-based date comparisons.
+        self.metadata_field_info = [
+            AttributeInfo(name="rfp_number", type="string", description="공고 번호"),
+            AttributeInfo(name="project_title", type="string", description="사업명"),
+            AttributeInfo(name="budget_krw", type="integer", description="사업 금액"),
+            AttributeInfo(name="agency", type="string", description="발주 기관"),
+            AttributeInfo(name="publish_date", type="string", description="공개 일자 (YYYY-MM-DD 형식의 문자열)"),
+            AttributeInfo(name="bid_start_date", type="string", description="입찰 참여 시작일 (YYYY-MM-DD 형식의 문자열)"),
+            AttributeInfo(name="bid_end_date", type="string", description="입찰 참여 마감일 (YYYY-MM-DD 형식의 문자열)"),
+            AttributeInfo(name="summary", type="string", description="사업 요약"),
+            AttributeInfo(name="filename", type="string", description="파일명")
+        ]
+
         self.retriever = SelfQueryRetriever.from_llm(
-            llm=self.llm,
-            vectorstore=self.vectorstore,
-            document_contents="정부 및 공공기관에서 발주하는 RFP(제안요청서)의 상세 내용. 사업 개요, 예산, 기간, 제안 조건 등을 포함함. ",
-            metadata_field_info=[
-                AttributeInfo(name="rfp_number", type="string", description="공고 번호"),
-                AttributeInfo(name="project_title", type="string", description="사업명"),
-                AttributeInfo(name="budget_krw", type="integer", description="사업 금액"),
-                AttributeInfo(name="agency", type="string", description="발주 기관"),
-                AttributeInfo(name="publish_date", type="date", description="공개 일자"),
-                AttributeInfo(name="bid_start_date", type="date", description="입찰 참여 시작일"),
-                AttributeInfo(name="bid_end_date", type="date", description="입찰 참여 마감일"),
-                AttributeInfo(name="summary", type="string", description="사업 요약"),
-                AttributeInfo(name="filename", type="string", description="파일명")
-            ],
-            search_kwargs={"k": Config.TOP_K}, # "search_type": "mmr", "fetch_k": 20, "lambda_mult": 0.5
-            verbose=True  # 쿼리 파싱 과정을 확인하려면 True로 설정
-        )        
-        # self.retriever = self.vectorstore.as_retriever(
-        #     # search_type="similarity",  # search_kwargs={"k": Config.TOP_K}
-        #     search_type="mmr", search_kwargs={"k": Config.TOP_K, "fetch_k": 20, "lambda_mult": 0.5}
-        # )
+            self.llm,
+            self.vectorstore,
+            document_contents,
+            metadata_field_info=self.metadata_field_info,
+            search_kwargs={"k": Config.TOP_K},
+            verbose=True
+        )
+
+        self.document_content_description = document_contents
 
     def load_history(self) -> list:
         if not os.path.exists(Config.HISTORY_PATH):
