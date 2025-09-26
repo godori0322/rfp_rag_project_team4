@@ -1,8 +1,13 @@
+#chunk_test.py
 from document import chunk
 from config import Config  
 import os
 import pandas as pd
 import pdfplumber
+import sys
+
+# 절대경로 설정
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # 테스트할 파일
 filename = "국민연금공단_2024년 이러닝시스템 운영 용역.hwp"

@@ -1,6 +1,13 @@
+#browse_db.py
+import sys
+import os
 import chromadb
-from config import Config
 import pprint
+
+# 절대경로 설정
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from config import Config
 
 def browse_vector_db(limit: int = 10):
     """
