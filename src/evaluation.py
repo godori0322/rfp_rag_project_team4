@@ -36,7 +36,7 @@ ragas_embeddings = OpenAIEmbeddings(client=openai_client, model="text-embedding-
 # RAGAS 메트릭 초기화
 metrics = [
     # --- Retrieval Evaluation ---
-    # ContextRelevance: Is the retrieved context relevant to the question?
+    # ContextRelevancy: Is the retrieved context relevant to the question?
     ContextRelevance(), 
     # ContextPrecision: Is the context useful for answering (signal-to-noise)?
     ContextPrecision(),
