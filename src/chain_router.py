@@ -31,7 +31,6 @@ class ChainRouter:
         return history[-window_size:] if history else []
 
     def create_router_chain(self):
-        """## 변경된 로직: 라우팅 로직을 @chain을 사용한 함수로 처리합니다."""
         # 컨텍스트 프롬프트: 이전 대화 맥락 유지
         contextualize_prompt = ChatPromptTemplate.from_messages([
             ("system", "너는 대화 맥락을 반영해서 사용자의 현재 질문을 독립적인 형태로 재구성하는 도우미야."),
@@ -90,7 +89,7 @@ class ChainRouter:
     def _create_general_chain(self):
         """## 일반 대화 체인 (Route 1)"""
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. RFP 문서가 아닌 일반적인 주제에 대해 답변해줘."),
+            ("system", "너는 RFP 문서에 대한 내용이 아니거나, 이해할 수 없는 문장이나 질문이면 '다시 질문해주세요.'라고 솔직하게 말해야해. "),
             ("human", "{refined_query}")
         ])
         return prompt | self.llm | StrOutputParser()
@@ -103,7 +102,11 @@ class ChainRouter:
             # 1. 질문을 기반으로 관련 문서를 검색합니다.
             docs = self.find_documents(question)
             if not docs:
+                print("--- WARNING (Default QA): 관련된 문서를 찾지 못했습니다. ---")
                 return "관련된 문서를 찾을 수 없습니다."
+            
+            retrieved_titles = [doc.metadata.get('project_title', '제목 없음') for doc in docs]
+            print(f"--- INFO (Default QA): 검색된 문서 목록: {list(set(retrieved_titles))} ---")
 
             # 2. 각 문서의 내용과 메타데이터를 결합하여 컨텍스트 문자열 리스트를 생성합니다.
             context_parts = []
@@ -126,15 +129,18 @@ class ChainRouter:
         prompt = ChatPromptTemplate.from_messages([
             (
                 "system",
-                "너는 RFP 문서 기반 질의응답 AI 어시턴트야.\n"
-                "주어진 컨텍스트는 여러 문서로 구성되어 있으며, 각 문서는 [문서 정보]와 [문서 본문]으로 나뉘어 있어.\n\n"
+                "당신은 대한민국 B2G(정부 대상 사업) RFP(제안요청서) 분석을 전문으로 하는 아주 똑똑하고 정확한 AI 컨설턴트입니다.\n"
+                "당신의 임무는 주어진 [컨텍스트]만을 근거로 사용자의 [질문]에 대해 체계적이고 사실에 입각하여 답변하는 것입니다.\n\n"
+                "**작업 절차:**\n"
+                "1. 사용자의 [질문]의 핵심 의도를 정확히 파악합니다.\n"
+                "2. 제공된 [컨텍스트] 내의 여러 문서들을 빠르게 스캔하여, 질문과 가장 관련 있는 내용이 담긴 [문서 본문]을 찾습니다.\n"
+                "3. 찾은 내용을 바탕으로 답변을 생성합니다.\n\n"
                 "**답변 생성 규칙:**\n"
-                "1. 사용자의 질문에 가장 관련 있는 [문서 본문]의 내용을 찾아 답변의 근거로 삼아야 해.\n"
-                "2. 답변의 출처를 명확히 하기 위해, 근거로 사용한 문서의 [문서 정보]에 있는 'project_title'이나 'rfp_number'를 반드시 언급해야 해. (예: 'OO 사업(공고번호: 123)에 따르면...')\n"
-                "3. 만약 컨텍스트에서 질문과 관련된 정보를 찾을 수 없다면, '제공된 문서에서 관련 정보를 찾을 수 없습니다.'라고 명확히 답변해야 해.\n"
-                "4. 절대로 추측하거나 컨텍스트에 없는 정보를 지어내면 안 돼.\n"
+                "- **출처 명시:** 답변의 신뢰도를 높이기 위해, 근거로 사용한 문서의 [문서 정보]에 있는 'project_title' 또는 'rfp_number'를 반드시 언급해야 합니다. (예: 'OO 사업(공고번호: 123)에 따르면...')\n"
+                "- **사실 기반:** 오직 [컨텍스트]에 명시된 내용만을 근거로 답변해야 하며, 절대 당신의 사전 지식을 사용하거나 정보를 추측해서는 안 됩니다.\n"
+                "- **정보 부재 시:** 만약 [컨텍스트]에서 질문에 대한 답을 명확하게 찾을 수 없다면, '제공된 문서에서는 해당 정보를 확인할 수 없습니다.'라고만 답변해야 합니다."
             ),
-            ("human", "질문: {question}\n\n[컨텍스트]:\n{context}")
+            ("human", "[질문]: {question}\n\n[컨텍스트]:\n{context}")
         ])
 
         # 체인 구성: 입력(질문) -> 컨텍스트 생성 -> 프롬프트 조합 -> LLM 답변 -> 문자열 출력
@@ -195,7 +201,7 @@ class ChainRouter:
 
     
     def _create_comparison_chain(self):
-        """## [최종] 지능형 비교 분석 체인 (단일/다중 문서 처리)"""
+        """## 비교 분석 체인 (단일/다중 문서 처리)"""
         # 1단계: 비교 유형 분류 및 정보 추출(Triage) 체인
         triage_parser = JsonOutputParser()
         triage_prompt = ChatPromptTemplate.from_template(
