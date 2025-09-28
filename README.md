@@ -30,7 +30,7 @@ data/pdf 폴더에 PDF 파일 100개 준비된 상태에서 벡터 스토어 생
 ```
 python src/main_vs.py
 ```
-평가함수
+평가함수 실행
 python src/evaluation.py
 =======
 
