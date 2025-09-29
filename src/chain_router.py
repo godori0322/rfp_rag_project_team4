@@ -36,8 +36,41 @@ class ChainRouter:
     def get_recent_history(self, history, window_size=5):
         return history[-window_size:] if history else []
 
+    def _create_rephrasing_chain(self):
+        prompt = ChatPromptTemplate.from_messages([
+            MessagesPlaceholder("history"),
+            ("user", "{input}"),
+            ("user", "주어진 대화 기록을 고려하여, 후속 질문을 검색에 용이한 독립적인 질문으로 재구성해주세요.")
+        ])
+        return prompt | self.llm | StrOutputParser()
+
+    def get_hybrid_retrieved_documents(self, x: dict) -> List[Document]:
+        """원본 질문과 재구성된 질문 모두로 검색하여 결과를 합치고 중복을 제거합니다."""
+        original_question = x["input"]
+        rephrased_question = x["rephrased_question"]
+
+        print(f"--- INFO (Hybrid Retrieval): 원본 질문 '{original_question}'으로 검색 ---")
+        docs_raw = self.find_documents(original_question)
+        
+        print(f"--- INFO (Hybrid Retrieval): 재구성된 질문 '{rephrased_question}'으로 검색 ---")
+        docs_rephrased = self.find_documents(rephrased_question)
+
+        # 두 문서 리스트를 합칩니다.
+        combined_docs = docs_raw + docs_rephrased
+
+        # 중복된 문서를 제거합니다. page_content를 기준으로 고유성을 확인합니다.
+        unique_docs = {}
+        for doc in combined_docs:
+            unique_docs[doc.page_content] = doc
+        
+        final_docs = list(unique_docs.values())
+        print(f"--- INFO (Hybrid Retrieval): 총 {len(combined_docs)}개 문서를 검색, 중복 제거 후 {len(final_docs)}개 문서 확보 ---")
+        
+        return final_docs
+
     def create_router_chain(self):
         # 라우터 프롬프트: 쿼리 의도 분류
+        rephrasing_chain = self._create_rephrasing_chain()
         route_prompt = ChatPromptTemplate.from_template(
             """사용자의 질문을 분석하여, 질문의 의도를 다음 5가지 카테고리 중 하나로 분류하세요.
             `metadata_search`: 특정 조건(기관, 사업명 등)으로 문서를 찾아달라는 요청.
@@ -85,7 +118,7 @@ class ChainRouter:
             분류: default_qa
 
             # 이제 이 질문을 분류하세요:
-            질문: {input}
+            질문: {rephrased_question}
             분류:"""
         )
 
@@ -122,6 +155,7 @@ class ChainRouter:
             RunnablePassthrough.assign(
                 history=lambda x: self.get_recent_history(x.get("history", []))  # 답변단계에서만 쓰기 위해 유지
             )
+            .assign(rephrased_question=rephrasing_chain)
             # retriever에는 원문 input 그대로 사용
             .assign(classification=route_chain)
             | RunnableLambda(log_and_pass_through)
@@ -166,11 +200,11 @@ class ChainRouter:
     def _create_default_qa_chain(self):
         """## RFP 관련 기본 QA 체인 (Route 2, Fallback Route) - 메타데이터 참조 """
         
-        def get_context_with_metadata(x: dict) -> str:
+        def get_context(x: dict) -> str:
             # 함수가 딕셔너리 'x'를 받도록 하여 'input' 키에 접근하도록 통일합니다.
             question = x["input"]
             print(f"--- INFO (Default QA): '{question}'에 대한 문서 검색 수행 ---")
-            docs = self.find_documents(question)
+            docs = self.get_hybrid_retrieved_documents(x) # self.find_documents(question)
             if not docs:
                 print("--- WARNING (Default QA): 관련된 문서를 찾지 못했습니다. ---")
                 return "관련된 문서를 찾을 수 없습니다."
@@ -202,15 +236,21 @@ class ChainRouter:
             ("human", "[질문]: {input}\n\n[컨텍스트]:\n{context}")
         ])
 
+        def answer(x):
+            print(x)
+            print(type(x))
+            return x
+
         return (
             {
-                "context": get_context_with_metadata,
+                "context": get_context,
                 "input": lambda x: x["input"],
                 "history": lambda x: x.get("history", []),
             }
             | prompt
             | self.llm
             | StrOutputParser()
+            | RunnableLambda(answer)
         )
 
 

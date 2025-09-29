@@ -22,7 +22,7 @@ def main():
         
         response = bot.ask(query_str)
         print("\n[답변]")
-        print(response)
+        print(response['answer'])
         print("-" * 20)
 
 if __name__ == "__main__":
