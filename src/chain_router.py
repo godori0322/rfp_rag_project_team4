@@ -121,7 +121,8 @@ class ChainRouter:
         """## 일반 대화 체인 (Route 1)"""
         prompt = ChatPromptTemplate.from_messages([
             ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. RFP 문서가 아닌 일반적인 주제에 대해 답변해줘."),
-            ("human", "{query}")
+            MessagesPlaceholder("history"),  # ✅ 답변 단계에서만 history 반영
+            ("human", "{input}")
         ])
         return prompt | self.llm | StrOutputParser()
 
