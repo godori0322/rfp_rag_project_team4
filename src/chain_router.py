@@ -90,12 +90,22 @@ class ChainRouter:
 
         # 전체 파이프라인 결합 - 안정적인 데이터 흐름 보장
         def log_and_pass_through(data):
-            classification_dict = data.get('classification', {})
-            classification_str = classification_dict.get('classification', 'N/A')
-            if isinstance(classification_str, str):
-                classification_str = classification_str.strip()
+            classification = data.get('classification', 'N/A')
+            
+            # 문자열 또는 dict 처리
+            if isinstance(classification, dict):
+                classification_str = classification.get('classification', 'N/A')
+            else:  # str 또는 그 외
+                classification_str = classification
+
+            # 안전하게 strip
+            classification_str = classification_str.strip() if isinstance(classification_str, str) else 'N/A'
+
             print(f"✅ 라우터 분류 결과: {classification_str}")
+            # 문자열 형태로 덮어쓰기
+            data['classification'] = classification_str
             return data
+
 
         # ✅ 전체 파이프라인
         full_chain = (
@@ -103,7 +113,7 @@ class ChainRouter:
                 history=lambda x: self.get_recent_history(x.get("history", []))  # 답변단계에서만 쓰기 위해 유지
             )
             # retriever에는 원문 input 그대로 사용
-            .assign(classification=lambda x: {"classification": route_chain.invoke({"input": x["input"]})})
+            .assign(classification=lambda x: route_chain.invoke({"input": x["input"]}))
             | RunnableLambda(log_and_pass_through)
             | RunnableBranch(
                 (lambda x: "metadata_search" in x.get("classification", ""), metadata_search_chain),
@@ -220,12 +230,12 @@ class ChainRouter:
             "- **일정:** (제안 마감일, 평가일 등)\n"
             "- **평가방식/참여조건:** (기술/가격 배점, 필수 자격 등)\n\n"
             "--- 문서 내용 ---\n"
-            "{text}\n"
+            "{context}\n"
             "--- 끝 ---\n\n"
             "항목별 핵심 정보 요약:"
         )
         # map_prompt에 전달
-        map_chain = {"text": lambda doc: doc.page_content} | map_prompt | self.llm | StrOutputParser()
+        map_chain = {"context": lambda doc: doc.page_content} | map_prompt | self.llm | StrOutputParser()
 
         # Reduce 
         reduce_prompt = ChatPromptTemplate.from_messages([
@@ -241,15 +251,18 @@ class ChainRouter:
             MessagesPlaceholder("history"),
             ("human",
             "--- 부분 정보 목록 ---\n"
-            "{text}\n"
+            "{context}\n"
             "--- 끝 ---\n\n"
             "최종 사업 요약 브리핑:")
         ])
         # 합쳐진 부분 요약들을 text 변수에 매핑하여 reduce_prompt에 전달
-        reduce_chain = {
-            "text": lambda summaries: "\n\n---\n\n".join(summaries),
-            "history": lambda x: x.get("history", [])  # 없으면 빈 리스트
-        } | reduce_prompt | self.llm | StrOutputParser()
+        reduce_chain = (
+            RunnablePassthrough.assign(context=RunnableLambda(
+                lambda summaries: "\n\n---\n\n".join(summaries)
+            )
+            | reduce_prompt | self.llm | StrOutputParser()
+        )
+        )
         
         # map의 결과(문자열 리스트)를 reduce가 처리할 수 있는 형태(단일 문자열)로 변환하는 단계를 추가
         return (RunnableLambda(get_documents) | map_chain.map() | reduce_chain)
@@ -350,7 +363,7 @@ class ChainRouter:
             (lambda x: x.get("triage_result", {}).get("type") == "multi_document", multi_doc_chain),
             lambda x: {"extracted_snippets": "비교 유형을 식별할 수 없습니다."}
         )
-        return RunnablePassthrough.assign(triage_result=triage_chain) | branch
+        return RunnablePassthrough.assign(triage_result=triage_chain, history=lambda x: x.get("history", [])) | branch
 
 
 
