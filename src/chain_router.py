@@ -22,7 +22,7 @@ class ChainRouter:
         self.tracer = tracer
 
     def find_documents(self, question):
-        return self.retriever.get_relevant_documents(question)
+        return self.retriever.invoke(question)
     
     def find_contexts(self, docs):
         return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
@@ -45,7 +45,7 @@ class ChainRouter:
             """사용자의 질문을 분석하여, 질문의 의도를 다음 5가지 카테고리 중 하나로 분류하세요.
             `general`: RFP 문서와 관련 없는 일반적인 질문 (인사, 농담, 상식 등).
             `summarization`: 문서의 핵심 내용을 요약해달라는 요청.
-            `comparison`: 두 개 이상의 문서 내용을 비교하거나, 단일 문서내의 내용을 비교해달라는 요청.
+            `comparison`: 다중 문서 비교나, 단일 문서내의 내용을 비교해달라는 요청.
             `recommendation`: 특정 사업과 유사한 다른 사업을 추천해달라는 요청.
             `default_qa`: RFP 문서 내용에 대한 구체적인 질문 또는 위 카테고리에 속하지 않는 모든 RFP 관련 질문.
 
@@ -73,7 +73,7 @@ class ChainRouter:
             )
             | RunnablePassthrough.assign(refined_query=contextualizer_chain)
             .assign(classification=lambda x: route_chain.invoke({"input": x['refined_query']}))
-            | RunnableLambda(log_and_pass_through) # [수정] 안전한 로깅 함수 사용
+            | RunnableLambda(log_and_pass_through) 
             | RunnableBranch(
                 (lambda x: "general" in x["classification"], general_chain),
                 (lambda x: "summarization" in x["classification"], summarization_chain),
@@ -130,15 +130,16 @@ class ChainRouter:
             (
                 "system",
                 "당신은 대한민국 B2G(정부 대상 사업) RFP(제안요청서) 분석을 전문으로 하는 아주 똑똑하고 정확한 AI 컨설턴트입니다.\n"
-                "당신의 임무는 주어진 [컨텍스트]만을 근거로 사용자의 [질문]에 대해 체계적이고 사실에 입각하여 답변하는 것입니다.\n\n"
+                # "당신의 임무는 주어진 [컨텍스트]만을 근거로 사용자의 [질문]에 대해 체계적이고 사실에 입각하여 답변하는 것입니다.\n\n"
+                "당신은 주어진 [컨텍스트]에서 사용자의 [질문]에 대한 정답을 찾는 데 특화된 정보 추출 전문가입니다.\n\n"
                 "**작업 절차:**\n"
-                "1. 사용자의 [질문]의 핵심 의도를 정확히 파악합니다.\n"
-                "2. 제공된 [컨텍스트] 내의 여러 문서들을 빠르게 스캔하여, 질문과 가장 관련 있는 내용이 담긴 [문서 본문]을 찾습니다.\n"
-                "3. 찾은 내용을 바탕으로 답변을 생성합니다.\n\n"
-                "**답변 생성 규칙:**\n"
-                "- **출처 명시:** 답변의 신뢰도를 높이기 위해, 근거로 사용한 문서의 [문서 정보]에 있는 'project_title' 또는 'rfp_number'를 반드시 언급해야 합니다. (예: 'OO 사업(공고번호: 123)에 따르면...')\n"
-                "- **사실 기반:** 오직 [컨텍스트]에 명시된 내용만을 근거로 답변해야 하며, 절대 당신의 사전 지식을 사용하거나 정보를 추측해서는 안 됩니다.\n"
-                "- **정보 부재 시:** 만약 [컨텍스트]에서 질문에 대한 답을 명확하게 찾을 수 없다면, '제공된 문서에서는 해당 정보를 확인할 수 없습니다.'라고만 답변해야 합니다."
+                "1. **집중 분석:** 사용자의 [질문]을 분석한 후, [컨텍스트]에서 질문에 답할 수 있는 **정확한 문장이나 구절**을 찾습니다.\n"
+                "2. **인용 및 답변:** 찾아낸 문장이나 구절을 근거로 하여, 질문에 대한 명확하고 간결한 답변을 생성합니다. 답변 시에는 근거가 된 문서의 'project_title'을 반드시 언급해야 합니다.\n\n"
+
+                "**매우 중요한 규칙:**\n"
+                "- **답변 우선:** 당신의 최우선 목표는 어떻게든 컨텍스트 내에서 답변을 찾아내는 것입니다. 정보가 있다면 절대로 '정보를 찾을 수 없다'고 답변해서는 안 됩니다.\n"
+                "- **출처 제시:** 모든 답변은 반드시 [컨텍스트]에 기반해야 하며, 어떤 문서에서 정보를 찾았는지 명시해야 합니다. (예: '「2024년 이러닝시스템 운영 용역」 문서에 따르면...')\n"
+                "- **정보 부재 시:** 여러 번 확인했음에도 불구하고 컨텍스트에 답변의 근거가 될 내용이 정말로 없다면, 그때서야 '제공된 문서에서는 질문에 대한 명확한 정보를 찾을 수 없었습니다.'라고 답변하세요."
             ),
             ("human", "[질문]: {question}\n\n[컨텍스트]:\n{context}")
         ])
@@ -155,49 +156,60 @@ class ChainRouter:
         )
 
     def _create_summarization_chain(self):
-        """## 변경된 로직: 정보 요약 체인 (Route 3) - LCEL 기반 Map-Reduce"""
+        """## 정보 요약 체인 - 전문가 프롬프트 및 코드 수정"""
         
-        # 1. 검색 및 문서 분할 (get_documents_with_metadata는 기존 로직)
-        def get_documents_with_metadata(x):
-            docs = self.find_documents(x['refined_query'])
-            # 메타데이터를 텍스트에 포함시켜 반환
-            docs = [Document(page_content=f"메타데이터: {json.dumps(doc.metadata, ensure_ascii=False, indent=2)}\n\n문서 내용: {doc.page_content}") for doc in docs]
-            for doc in docs:
-                print(f'{doc.page_content}\n')
+        def get_documents(x):
+            question = x['refined_query']
+            print(f"--- INFO (Summarization): '{question}'에 대한 문서 검색 수행 ---")
+            docs = self.find_documents(question)
+            
+            if not docs:
+                print("--- WARNING (Summarization): 관련된 문서를 찾지 못했습니다. ---")
+                return [] # 빈 리스트를 반환하여 다음 단계가 정상적으로 처리되도록 함
+
+            retrieved_titles = [doc.metadata.get('project_title', '제목 없음') for doc in docs]
+            print(f"--- INFO (Summarization): 검색된 문서 목록: {list(set(retrieved_titles))} ---")
             return docs
 
-        # 2. Map 단계 프롬프트
-        map_prompt_template = """
-        다음은 RFP 문서의 일부 내용입니다. 이 내용에서 핵심 정보를 요약하세요.
-        ---
-        {text}
-        ---
-        요약:
-        """
-        map_prompt = ChatPromptTemplate.from_template(map_prompt_template)
-        map_chain = map_prompt | self.llm | StrOutputParser()
-
-        # 3. Reduce 단계 프롬프트
-        reduce_prompt_template = """
-        다음은 여러 문서 청크에 대한 요약본입니다. 이 요약들을 종합하여 하나의 최종 요약을 생성하세요.
-        최종 요약은 핵심 내용을 간결하고 명확하게 포함해야 합니다.
-        ---
-        {text}
-        ---
-        최종 요약:
-        """
-        reduce_prompt = ChatPromptTemplate.from_template(reduce_prompt_template)
-        reduce_chain = reduce_prompt | self.llm | StrOutputParser()
-        
-        # 4. 전체 파이프라인 결합
-        # 문서 검색 -> 각 문서를 요약(map) -> 요약들을 합쳐 최종 요약(reduce)
-        summarize_pipeline = (
-            RunnableLambda(get_documents_with_metadata)
-            | map_chain.map()  # 모든 문서에 대해 map_chain 실행
-            | reduce_chain      # map 결과를 reduce_chain에 전달
+        # [성능 개선] Map 단계: 전문가 페르소나와 구체적인 지시사항을 담은 프롬프트
+        map_prompt = ChatPromptTemplate.from_template(
+           "당신은 B2G 사업 전문 컨설턴트입니다. 주어진 RFP 문서의 일부 내용을 분석하여, 제안 결정에 영향을 미칠 수 있는 다음 핵심 정보들을 항목별로 요약해 주십시오.\n\n"
+            "- **핵심 과업/요구사항:** (기술, 기능, 보안 등)\n"
+            "- **예산/기간:** (금액, 계약 기간 등)\n"
+            "- **일정:** (제안 마감일, 평가일 등)\n"
+            "- **평가방식/참여조건:** (기술/가격 배점, 필수 자격 등)\n"
+            "- **기타 특이사항:** (지적재산권, 보안 서약 등)\n\n"
+            "정보가 없는 항목은 생략해도 좋습니다.\n\n"
+            "--- 문서 내용 ---\n"
+            "{text}\n"
+            "--- 끝 ---\n\n"
+            "항목별 핵심 정보 요약:"
         )
+        # page_content를 text 변수에 매핑하여 map_prompt에 전달합니다.
+        map_chain = {"text": lambda doc: doc.page_content} | map_prompt | self.llm | StrOutputParser()
+
+        # [성능 개선] Reduce 단계: 여러 요약을 종합하여 최종 보고서를 작성하도록 지시하는 프롬프트
+        reduce_prompt = ChatPromptTemplate.from_template(
+            "당신은 B2G 사업 수주 전략을 수립하는 수석 컨설턴트입니다. 아래에 흩어져 있는 정보들을 종합하여, 의사결정을 위한 최종 '사업 요약 브리핑'을 작성해 주십시오.\n\n"
+            "**브리핑 작성 가이드라인:**\n"
+            "1. **핵심 요약 (Executive Summary):** 가장 먼저 사업명, 발주기관, 예산, 기간, 핵심 기술/과업을 한두 문장으로 요약하여 제시하세요.\n"
+            "2. **본문:** '사업 목표', '주요 과업 범위', '예산 및 기간', '제안 시 주요 고려사항(평가방식, 참여자격, 특이사항 등)' 순서로 구조화하여 상세히 설명하세요.\n"
+  
+            "3. **확인 필요한 정보:** 만약 예산, 기간 등 **의사결정에 필수적인 정보가 누락되었다면, 반드시 '※ 확인 필요한 핵심 정보' 항목을 만들어 명시**해야 합니다.\n\n"
+            "--- 부분 정보 목록 ---\n"
+            "{text}\n"
+            "--- 끝 ---\n\n"
+            "최종 사업 요약 브리핑:"
+        )
+        # 합쳐진 부분 요약들을 text 변수에 매핑하여 reduce_prompt에 전달합니다.
+        reduce_chain = {"text": lambda summaries: "\n\n---\n\n".join(summaries)} | reduce_prompt | self.llm | StrOutputParser()
         
-        return summarize_pipeline
+        # [코드 수정] map의 결과(문자열 리스트)를 reduce가 처리할 수 있는 형태(단일 문자열)로 변환하는 단계를 추가합니다.
+        return (
+            RunnableLambda(get_documents)
+            | map_chain.map()
+            | reduce_chain
+        )
 
     
     def _create_comparison_chain(self):
@@ -242,10 +254,11 @@ class ChainRouter:
         )
         
         multi_doc_chain = RunnablePassthrough.assign(
-            item_A=lambda x: x["triage_result"]["item_A"], item_B=lambda x: x["triage_result"]["item_B"],
-            criteria=lambda x: x["triage_result"]["criteria"],
-            context_A=lambda x: get_context_for_multi_doc(x["triage_result"]["item_A"]),
-            context_B=lambda x: get_context_for_multi_doc(x["triage_result"]["item_B"])
+            item_A=lambda x: x["triage_result"].get("item_A", "알 수 없는 항목 A"),
+            item_B=lambda x: x["triage_result"].get("item_B", "알 수 없는 항목 B"),
+            criteria=lambda x: x["triage_result"].get("criteria", "전반적인 특징"),
+            context_A=lambda x: get_context_for_multi_doc(x["triage_result"].get("item_A")),
+            context_B=lambda x: get_context_for_multi_doc(x["triage_result"].get("item_B"))
         ) | multi_doc_prompt | self.llm | StrOutputParser()
         
         # 2-2: 단일 문서 비교 로직
@@ -254,10 +267,20 @@ class ChainRouter:
             triage_result = input_dict["triage_result"]
             
             # 이제 '비교 정보' 폴더 안에서 필요한 서류를 찾습니다.
-            base_doc_name = triage_result["base_document"]
-            topic_A = triage_result["topic_A"]
-            topic_B = triage_result["topic_B"]
+            base_doc_name = triage_result.get("base_document")
+            topic_A = triage_result.get("topic_A")
+            topic_B = triage_result.get("topic_B")
             
+            if not all([base_doc_name, topic_A, topic_B]):
+                print("--- WARNING (Single-Doc): LLM이 비교 대상을 정확히 추출하지 못했습니다. ---")
+                return {
+                    "extracted_snippets": "비교 대상을 질문에서 정확히 추출하지 못해 비교를 수행할 수 없습니다.",
+                    "base_document": base_doc_name or "알 수 없음",
+                    "topic_A": topic_A or "알 수 없음",
+                    "topic_B": topic_B or "알 수 없음",
+                    "criteria": triage_result.get("criteria", "알 수 없음"),
+                }
+                
             print(f"--- INFO (Single-Doc): 기준 문서 '{base_doc_name}'의 컨텍스트 검색 ---")
             base_docs = self.retriever.invoke(base_doc_name)
             if not base_docs: return {"extracted_snippets": f"기준 문서 '{base_doc_name}'를 찾을 수 없습니다.", **triage_result}
@@ -289,21 +312,23 @@ class ChainRouter:
 
 
     def _create_recommendation_chain(self):
-        """## 유사 사업 추천 체인 (Route 5) - [Query Expansion 적용]"""
+        """## [성능 개선] 유사 사업 추천 체인 (Route 5) - 전문가 프롬프트 및 데이터 흐름 수정"""
 
-        # Query Expansion 체인 정의
+        # [성능 개선] Map 단계 (Query Expansion): 다각적인 관점에서 검색어를 생성하도록 프롬프트 개선
         query_expansion_prompt = ChatPromptTemplate.from_template(
-            """당신은 사용자의 질문을 벡터 검색에 더 효과적인 키워드 목록으로 확장하는 전문가입니다.
-            사용자의 원본 질문의 핵심 의미를 파악하여, 관련 동의어, 기술 용어, 상위 개념 등을 포함한 검색 키워드 3개를 쉼표(,)로 구분하여 생성하세요.
-
-            사용자 질문: {input}
-            검색 키워드:"""
+            "당신은 B2G 사업 검색 전문가입니다. 사용자의 요청을 '핵심 기술', '사업 분야', '프로젝트 유형'의 관점에서 분석하여, "
+            "벡터 검색에 가장 효과적인 검색 키워드 3개를 쉼표(,)로 구분하여 생성하세요.\n\n"
+            "사용자 요청: {question}\n"
+            "검색 키워드:"
         )
+        # [코드 수정] refined_query를 사용하도록 수정
+        query_expansion_chain = {"question": lambda x: x['refined_query']} | query_expansion_prompt | self.llm | StrOutputParser()
 
-        query_expansion_chain = query_expansion_prompt | self.llm | StrOutputParser()
-
-        # 헬퍼 함수
+        # 헬퍼 함수 (변경 없음)
         def format_docs(docs: List[Document]) -> str:
+            # 검색 결과가 없을 경우를 대비한 방어 코드
+            if not docs:
+                return "추천할 만한 유사 사업을 찾지 못했습니다."
             return "\n\n".join(
                 f"### 사업명: {doc.metadata.get('project_title', '제목 없음')}\n"
                 f"공고번호: {doc.metadata.get('rfp_number', '미상')}\n"
@@ -311,37 +336,34 @@ class ChainRouter:
                 for doc in docs
             )
             
+        # [성능 개선] Reduce 단계 (Recommendation): 순위와 구체적인 근거를 제시하도록 프롬프트 강화
         recommendation_prompt = ChatPromptTemplate.from_template(
-            """당신은 사용자의 요청에 기반하여 유사한 사업을 추천하고, 그 이유를 설명하는 B2G 입찰 전문 컨설턴트입니다.
-
-            **사용자 원본 요청:**
-            {original_input}
-
-            **검색된 유사 사업 목록:**
-            {context}
-
-            **지시사항:**
-            '검색된 유사 사업 목록'을 바탕으로, 각 사업이 왜 '사용자 원본 요청'과 유사한지 핵심 이유를 설명하며 추천 목록을 작성해주십시오.
-            """
+            "당신은 '검색된 유사 사업 목록'만을 사용하여 사용자의 요청과 유사한 사업을 추천하는 B2G 사업 분석가입니다.\n\n"
+            "**사용자 원본 요청:**\n"
+            "{original_input}\n\n"
+            "**검색된 유사 사업 목록:**\n"
+            "{context}\n\n"
+            "--- (매우 중요한 규칙) ---\n"
+            "1. **역할 준수:** 당신의 유일한 임무는 '검색된 유사 사업 목록'에 있는 사업들을 '사용자 원본 요청'과 비교하여 추천 목록을 만드는 것입니다.\n"
+            "2. **직접 답변 금지:** **절대로 '사용자 원본 요청'에 대해 당신의 자체 지식으로 직접 답변을 생성하면 안 됩니다.** 예를 들어, 사용자가 'A 사업의 교육 내용은?'이라고 물었더라도, 교육 내용에 대해 답변하는 것이 아니라, 해당 요청과 유사한 다른 사업을 목록에서 찾아 추천해야 합니다.\n"
+            "3. **근거 기반 추천:** '검색된 유사 사업 목록'을 바탕으로, 가장 유사도가 높다고 생각하는 순서대로 최대 3개의 사업을 추천하고, 어떤 점(예: 기술, 사업 목표, 규모 등)이 유사한지 명확한 근거를 제시해야 합니다.\n"
+            "4. **결과 없음 처리:** 만약 '검색된 유사 사업 목록'에 '추천할 만한 유사 사업을 찾지 못했습니다.'라는 내용이 있다면, 다른 말을 덧붙이지 말고 \"요청하신 내용과 유사한 사업을 찾을 수 없었습니다.\"라고만 답변하십시오.\n"
+            "--- (규칙 끝) ---\n\n"
+            "**추천 목록 (위 규칙에 따라 작성):**"
         )
         
         mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
 
-        # 전체 체인 결합
-        recommendation_chain = (
+        # [코드 수정] 전체 체인 결합부의 데이터 흐름을 refined_query 기준으로 통일
+        return (
             {
-                # expanded_query 키에 확장된 쿼리 결과를 할당
                 "expanded_query": query_expansion_chain,
-                # original_input 키에 원본 사용자 입력을 그대로 유지
-                "original_input": (lambda x: x["input"])
+                "original_input": lambda x: x['refined_query'] # refined_query를 original_input으로 전달
             }
             | RunnablePassthrough.assign(
-                # expanded_query로 문서를 검색하고 그 결과를 'context'에 할당함.
                 context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
             )
             | recommendation_prompt
             | self.llm
             | StrOutputParser()
         )
-        
-        return recommendation_chain
