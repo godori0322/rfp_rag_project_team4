@@ -1,7 +1,7 @@
 # chain_router.py
 import json
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda, chain, RunnableBranch
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda, RunnableBranch
 from langchain_openai import ChatOpenAI
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
@@ -64,8 +64,9 @@ class ChainRouter:
 
         # 4단계: 전체 파이프라인 결합 - 안정적인 데이터 흐름 보장
         def log_and_pass_through(data):
-            print(f"✅ 라우터 분류 결과: {data['classification'].strip()}")
-            return data # 입력받은 데이터를 그대로 반환
+            classification = data.get('classification', 'N/A').strip()
+            print(f"✅ 라우터 분류 결과: {classification}")
+            return data
 
         full_chain = (
             RunnablePassthrough.assign(
@@ -73,56 +74,51 @@ class ChainRouter:
             )
             | RunnablePassthrough.assign(refined_query=contextualizer_chain)
             .assign(classification=lambda x: route_chain.invoke({"input": x['refined_query']}))
-            | RunnableLambda(log_and_pass_through) 
+            | RunnableLambda(log_and_pass_through)
             | RunnableBranch(
-                (lambda x: "general" in x["classification"], general_chain),
-                (lambda x: "summarization" in x["classification"], summarization_chain),
-                (lambda x: "comparison" in x["classification"], comparison_chain),
-                (lambda x: "recommendation" in x["classification"], recommendation_chain),
-                default_qa_chain
+                (lambda x: "general" in x.get("classification", ""), general_chain),
+                (lambda x: "summarization" in x.get("classification", ""), summarization_chain),
+                (lambda x: "comparison" in x.get("classification", ""), comparison_chain),
+                (lambda x: "recommendation" in x.get("classification", ""), recommendation_chain),
+                default_qa_chain  # 기본값
             )
         )
         
         return full_chain.with_config({"callbacks": [self.tracer]})
         
 
+
+
+
     def _create_general_chain(self):
         """## 일반 대화 체인 (Route 1)"""
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "너는 RFP 문서에 대한 내용이 아니거나, 이해할 수 없는 문장이나 질문이면 '다시 질문해주세요.'라고 솔직하게 말해야해. "),
+            ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. RFP 문서가 아닌 일반적인 주제에 대해 답변해줘."),
             ("human", "{refined_query}")
         ])
         return prompt | self.llm | StrOutputParser()
 
+
+
+
+
+
     def _create_default_qa_chain(self):
-        """## RFP 관련 기본 QA 체인 (Route 2, Fallback Route) - 메타데이터 참조 강화"""
+        """## RFP 관련 기본 QA 체인 (Route 2, Fallback Route) - 메타데이터 참조 """
         
         def get_context_with_metadata(question: str) -> str:
-            """질문과 관련된 문서를 검색하고, 각 문서의 메타데이터와 본문을 결합하여 컨텍스트를 생성합니다."""
-            # 1. 질문을 기반으로 관련 문서를 검색합니다.
+            print(f"--- INFO (Default QA): '{question}'에 대한 문서 검색 수행 ---")
             docs = self.find_documents(question)
             if not docs:
                 print("--- WARNING (Default QA): 관련된 문서를 찾지 못했습니다. ---")
                 return "관련된 문서를 찾을 수 없습니다."
-            
             retrieved_titles = [doc.metadata.get('project_title', '제목 없음') for doc in docs]
             print(f"--- INFO (Default QA): 검색된 문서 목록: {list(set(retrieved_titles))} ---")
-
-            # 2. 각 문서의 내용과 메타데이터를 결합하여 컨텍스트 문자열 리스트를 생성합니다.
             context_parts = []
             for doc in docs:
-                # 메타데이터를 JSON 형식으로 보기 좋게 변환합니다.
                 metadata_str = json.dumps(doc.metadata, ensure_ascii=False, indent=2)
-                # LLM이 문서의 정보와 본문을 명확히 구분할 수 있도록 형식을 지정합니다.
-                part = (
-                    f"--- 문서 시작 ---\n"
-                    f"[문서 정보]:\n{metadata_str}\n\n"
-                    f"[문서 본문]:\n{doc.page_content}\n"
-                    f"--- 문서 종료 ---"
-                )
+                part = (f"---\n[문서 정보]:\n{metadata_str}\n\n[문서 본문]:\n{doc.page_content}\n---")
                 context_parts.append(part)
-            
-            # 3. 모든 컨텍스트 부분을 하나의 문자열로 결합하여 반환합니다.
             return "\n\n".join(context_parts)
 
         # LLM에게 역할을 부여하고, 메타데이터 활용법을 명시적으로 지시하는 프롬프트
@@ -130,7 +126,6 @@ class ChainRouter:
             (
                 "system",
                 "당신은 대한민국 B2G(정부 대상 사업) RFP(제안요청서) 분석을 전문으로 하는 아주 똑똑하고 정확한 AI 컨설턴트입니다.\n"
-                # "당신의 임무는 주어진 [컨텍스트]만을 근거로 사용자의 [질문]에 대해 체계적이고 사실에 입각하여 답변하는 것입니다.\n\n"
                 "당신은 주어진 [컨텍스트]에서 사용자의 [질문]에 대한 정답을 찾는 데 특화된 정보 추출 전문가입니다.\n\n"
                 "**작업 절차:**\n"
                 "1. **집중 분석:** 사용자의 [질문]을 분석한 후, [컨텍스트]에서 질문에 답할 수 있는 **정확한 문장이나 구절**을 찾습니다.\n"
@@ -144,19 +139,15 @@ class ChainRouter:
             ("human", "[질문]: {question}\n\n[컨텍스트]:\n{context}")
         ])
 
-        # 체인 구성: 입력(질문) -> 컨텍스트 생성 -> 프롬프트 조합 -> LLM 답변 -> 문자열 출력
-        return (
-            {
-                "context": lambda x: get_context_with_metadata(x["refined_query"]),
-                "question": lambda x: x["refined_query"]
-            }
-            | prompt
-            | self.llm
-            | StrOutputParser()
-        )
+        return ({"context": lambda x: get_context_with_metadata(x["refined_query"]), "question": lambda x: x["refined_query"]} | prompt | self.llm | StrOutputParser())
+
+
+
+
+
 
     def _create_summarization_chain(self):
-        """## 정보 요약 체인 - 전문가 프롬프트 및 코드 수정"""
+        """## 정보 요약 체인 (Route 3)"""
         
         def get_documents(x):
             question = x['refined_query']
@@ -169,26 +160,33 @@ class ChainRouter:
 
             retrieved_titles = [doc.metadata.get('project_title', '제목 없음') for doc in docs]
             print(f"--- INFO (Summarization): 검색된 문서 목록: {list(set(retrieved_titles))} ---")
-            return docs
+            
+            formatted_docs = []
+            for doc in docs:
+                metadata_str = json.dumps(doc.metadata, ensure_ascii=False, indent=2)
+                combined_content = (
+                    f"[문서 정보]:\n{metadata_str}\n\n"
+                    f"[문서 본문]:\n{doc.page_content}"
+                )
+                formatted_docs.append(Document(page_content=combined_content))
+            return formatted_docs
 
-        # [성능 개선] Map 단계: 전문가 페르소나와 구체적인 지시사항을 담은 프롬프트
+        # Map 단계
         map_prompt = ChatPromptTemplate.from_template(
-           "당신은 B2G 사업 전문 컨설턴트입니다. 주어진 RFP 문서의 일부 내용을 분석하여, 제안 결정에 영향을 미칠 수 있는 다음 핵심 정보들을 항목별로 요약해 주십시오.\n\n"
+            "당신은 B2G 사업 전문 컨설턴트입니다. 주어진 [문서 정보]와 [문서 본문]을 모두 참고하여, 제안 결정에 영향을 미칠 수 있는 다음 핵심 정보들을 항목별로 요약해 주십시오.\n\n"
             "- **핵심 과업/요구사항:** (기술, 기능, 보안 등)\n"
             "- **예산/기간:** (금액, 계약 기간 등)\n"
             "- **일정:** (제안 마감일, 평가일 등)\n"
-            "- **평가방식/참여조건:** (기술/가격 배점, 필수 자격 등)\n"
-            "- **기타 특이사항:** (지적재산권, 보안 서약 등)\n\n"
-            "정보가 없는 항목은 생략해도 좋습니다.\n\n"
+            "- **평가방식/참여조건:** (기술/가격 배점, 필수 자격 등)\n\n"
             "--- 문서 내용 ---\n"
             "{text}\n"
             "--- 끝 ---\n\n"
             "항목별 핵심 정보 요약:"
         )
-        # page_content를 text 변수에 매핑하여 map_prompt에 전달합니다.
+        # map_prompt에 전달
         map_chain = {"text": lambda doc: doc.page_content} | map_prompt | self.llm | StrOutputParser()
 
-        # [성능 개선] Reduce 단계: 여러 요약을 종합하여 최종 보고서를 작성하도록 지시하는 프롬프트
+        # Reduce 
         reduce_prompt = ChatPromptTemplate.from_template(
             "당신은 B2G 사업 수주 전략을 수립하는 수석 컨설턴트입니다. 아래에 흩어져 있는 정보들을 종합하여, 의사결정을 위한 최종 '사업 요약 브리핑'을 작성해 주십시오.\n\n"
             "**브리핑 작성 가이드라인:**\n"
@@ -201,19 +199,18 @@ class ChainRouter:
             "--- 끝 ---\n\n"
             "최종 사업 요약 브리핑:"
         )
-        # 합쳐진 부분 요약들을 text 변수에 매핑하여 reduce_prompt에 전달합니다.
+        # 합쳐진 부분 요약들을 text 변수에 매핑하여 reduce_prompt에 전달
         reduce_chain = {"text": lambda summaries: "\n\n---\n\n".join(summaries)} | reduce_prompt | self.llm | StrOutputParser()
         
-        # [코드 수정] map의 결과(문자열 리스트)를 reduce가 처리할 수 있는 형태(단일 문자열)로 변환하는 단계를 추가합니다.
-        return (
-            RunnableLambda(get_documents)
-            | map_chain.map()
-            | reduce_chain
-        )
+        # map의 결과(문자열 리스트)를 reduce가 처리할 수 있는 형태(단일 문자열)로 변환하는 단계를 추가
+        return (RunnableLambda(get_documents) | map_chain.map() | reduce_chain)
+
+
+
 
     
     def _create_comparison_chain(self):
-        """## 비교 분석 체인 (단일/다중 문서 처리)"""
+        """## 비교 분석 체인 (단일/다중 문서 처리) (Route 4)"""
         # 1단계: 비교 유형 분류 및 정보 추출(Triage) 체인
         triage_parser = JsonOutputParser()
         triage_prompt = ChatPromptTemplate.from_template(
@@ -240,8 +237,8 @@ class ChainRouter:
 
         # 2-1: 다중 문서 비교 로직
         def get_context_for_multi_doc(item_name: str) -> str:
+            if not item_name: return "비교 대상이 질문에서 추출되지 않았습니다."
             print(f"--- INFO (Multi-Doc): '{item_name}'에 대한 지능형 문서 검색 수행 ---")
-            # self.retriever (SelfQueryRetriever)는 이름이 조금 달라도 유연하게 찾아낼 수 있습니다.
             docs = self.retriever.invoke(item_name)
             if not docs: return f"'{item_name}' 정보를 찾을 수 없습니다."
             return "\n\n".join(self.find_contexts(docs))
@@ -263,10 +260,7 @@ class ChainRouter:
         
         # 2-2: 단일 문서 비교 로직
         def retrieve_and_extract_for_single_doc(input_dict: dict) -> dict:
-            # 큰 서류철(input_dict)에서 '비교 정보' 폴더(triage_result)를 먼저 꺼냅니다.
-            triage_result = input_dict["triage_result"]
-            
-            # 이제 '비교 정보' 폴더 안에서 필요한 서류를 찾습니다.
+            triage_result = input_dict.get("triage_result", {})
             base_doc_name = triage_result.get("base_document")
             topic_A = triage_result.get("topic_A")
             topic_B = triage_result.get("topic_B")
@@ -300,8 +294,8 @@ class ChainRouter:
         single_doc_chain = RunnableLambda(retrieve_and_extract_for_single_doc) | single_doc_prompt | self.llm | StrOutputParser()
 
         branch = RunnableBranch(
-            (lambda x: x["triage_result"].get("type") == "single_document", single_doc_chain),
-            (lambda x: x["triage_result"].get("type") == "multi_document", multi_doc_chain),
+            (lambda x: x.get("triage_result", {}).get("type") == "single_document", single_doc_chain),
+            (lambda x: x.get("triage_result", {}).get("type") == "multi_document", multi_doc_chain),
             (lambda x: "비교 유형을 식별할 수 없습니다.")
         )
         return RunnablePassthrough.assign(triage_result=triage_chain) | branch
@@ -312,19 +306,19 @@ class ChainRouter:
 
 
     def _create_recommendation_chain(self):
-        """## [성능 개선] 유사 사업 추천 체인 (Route 5) - 전문가 프롬프트 및 데이터 흐름 수정"""
+        """## 유사 사업 추천 체인 (Route 5)"""
 
-        # [성능 개선] Map 단계 (Query Expansion): 다각적인 관점에서 검색어를 생성하도록 프롬프트 개선
+        # Map 단계 (Query Expansion):
         query_expansion_prompt = ChatPromptTemplate.from_template(
             "당신은 B2G 사업 검색 전문가입니다. 사용자의 요청을 '핵심 기술', '사업 분야', '프로젝트 유형'의 관점에서 분석하여, "
             "벡터 검색에 가장 효과적인 검색 키워드 3개를 쉼표(,)로 구분하여 생성하세요.\n\n"
             "사용자 요청: {question}\n"
             "검색 키워드:"
         )
-        # [코드 수정] refined_query를 사용하도록 수정
+        
         query_expansion_chain = {"question": lambda x: x['refined_query']} | query_expansion_prompt | self.llm | StrOutputParser()
 
-        # 헬퍼 함수 (변경 없음)
+        
         def format_docs(docs: List[Document]) -> str:
             # 검색 결과가 없을 경우를 대비한 방어 코드
             if not docs:
@@ -336,17 +330,15 @@ class ChainRouter:
                 for doc in docs
             )
             
-        # [성능 개선] Reduce 단계 (Recommendation): 순위와 구체적인 근거를 제시하도록 프롬프트 강화
+        # Reduce 단계 (Recommendation)
         recommendation_prompt = ChatPromptTemplate.from_template(
             "당신은 '검색된 유사 사업 목록'만을 사용하여 사용자의 요청과 유사한 사업을 추천하는 B2G 사업 분석가입니다.\n\n"
-            "**사용자 원본 요청:**\n"
-            "{original_input}\n\n"
-            "**검색된 유사 사업 목록:**\n"
-            "{context}\n\n"
+            "**사용자 원본 요청:**\n{original_input}\n\n"
+            "**검색된 유사 사업 목록:**\n{context}\n\n"
             "--- (매우 중요한 규칙) ---\n"
             "1. **역할 준수:** 당신의 유일한 임무는 '검색된 유사 사업 목록'에 있는 사업들을 '사용자 원본 요청'과 비교하여 추천 목록을 만드는 것입니다.\n"
-            "2. **직접 답변 금지:** **절대로 '사용자 원본 요청'에 대해 당신의 자체 지식으로 직접 답변을 생성하면 안 됩니다.** 예를 들어, 사용자가 'A 사업의 교육 내용은?'이라고 물었더라도, 교육 내용에 대해 답변하는 것이 아니라, 해당 요청과 유사한 다른 사업을 목록에서 찾아 추천해야 합니다.\n"
-            "3. **근거 기반 추천:** '검색된 유사 사업 목록'을 바탕으로, 가장 유사도가 높다고 생각하는 순서대로 최대 3개의 사업을 추천하고, 어떤 점(예: 기술, 사업 목표, 규모 등)이 유사한지 명확한 근거를 제시해야 합니다.\n"
+            "2. **직접 답변 금지:** 절대로 '사용자 원본 요청'에 대해 당신의 자체 지식으로 직접 답변을 생성하면 안 됩니다.\n"
+            "3. **근거 기반 추천:** '검색된 유사 사업 목록'을 바탕으로, 가장 유사도가 높다고 생각하는 순서대로 최대 3개의 사업을 추천하고, 어떤 점이 유사한지 명확한 근거를 제시해야 합니다.\n"
             "4. **결과 없음 처리:** 만약 '검색된 유사 사업 목록'에 '추천할 만한 유사 사업을 찾지 못했습니다.'라는 내용이 있다면, 다른 말을 덧붙이지 말고 \"요청하신 내용과 유사한 사업을 찾을 수 없었습니다.\"라고만 답변하십시오.\n"
             "--- (규칙 끝) ---\n\n"
             "**추천 목록 (위 규칙에 따라 작성):**"
@@ -354,11 +346,10 @@ class ChainRouter:
         
         mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
 
-        # [코드 수정] 전체 체인 결합부의 데이터 흐름을 refined_query 기준으로 통일
         return (
             {
                 "expanded_query": query_expansion_chain,
-                "original_input": lambda x: x['refined_query'] # refined_query를 original_input으로 전달
+                "original_input": lambda x: x['refined_query']
             }
             | RunnablePassthrough.assign(
                 context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
