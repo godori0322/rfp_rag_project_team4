@@ -243,7 +243,10 @@ class ChainRouter:
             "최종 사업 요약 브리핑:")
         ])
         # 합쳐진 부분 요약들을 text 변수에 매핑하여 reduce_prompt에 전달
-        reduce_chain = {"text": lambda summaries: "\n\n---\n\n".join(summaries)} | reduce_prompt | self.llm | StrOutputParser()
+        reduce_chain = {
+            "text": lambda summaries: "\n\n---\n\n".join(summaries),
+            "history": lambda x: x.get("history", [])  # 없으면 빈 리스트
+        } | reduce_prompt | self.llm | StrOutputParser()
         
         # map의 결과(문자열 리스트)를 reduce가 처리할 수 있는 형태(단일 문자열)로 변환하는 단계를 추가
         return (RunnableLambda(get_documents) | map_chain.map() | reduce_chain)
