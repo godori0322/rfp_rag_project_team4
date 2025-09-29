@@ -78,9 +78,9 @@ def load_documents():
         docs = chunk(
             filepath=filepath, 
             metadata=metadata,
-            header_percentile=95, # 상위 1% 폰트 크기를 헤더로 간주
-            final_chunk_size=2500, # 청크 사이즈 실험
-            final_chunk_overlap=200  # 청크 오버랩 실험
+            header_percentile=90, # 상위 10% 폰트 크기를 헤더로 간주
+            final_chunk_size=1000, # 청크 사이즈 실험
+            final_chunk_overlap=120  # 청크 오버랩 실험
         )
         all_docs.append(docs)
 
@@ -90,82 +90,122 @@ def load_documents():
 
 def chunk(filepath: str, 
           metadata: dict, 
-          header_percentile: int = 95, 
-          final_chunk_size: int = 2500, 
-          final_chunk_overlap: int = 200,
+          header_percentile: int = 90, 
+          final_chunk_size: int = 1000, 
+          final_chunk_overlap: int = 120,
           noise_patterns: List[str] = None
          ) -> List[Document]:
     """
-    개선된 문서 처리 및 청킹 함수.
+    개선된 문서 처리 및 청킹 함수 (테이블 중복 제거 포함).
 
     1. (노이즈 제거) 정규 표현식으로 머리글/바닥글 제거
-    2. (테이블 처리) 테이블을 Markdown으로 변환
-    3. (동적 헤더 탐지) 폰트 크기 분포를 분석하여 동적으로 헤더 임계값 설정
-    4. 1차 청킹: 헤더를 기준으로 의미 단위의 '챕터' 생성
-    5. 2차 청킹: RecursiveCharacterTextSplitter로 '챕터'를 최종 크기로 분할, 목차 제거
+    2. (테이블 처리) 테이블을 Markdown으로 변환 (중복 방지)
+    3. (텍스트 추출) extract_text() 기본 사용, 테이블 영역 제외
+    4. (chars 기반 fallback) 테이블 영역 제외
+    5. (동적 헤더 탐지) 폰트 크기 분포 분석
+    6. 1차 청킹: 헤더 기준 챕터 생성
+    7. 2차 청킹: RecursiveCharacterTextSplitter로 분할
     """
     if noise_patterns is None:
-        # 💡 일반적인 머리글/바닥글, 페이지 번호 제거 패턴 (필요시 추가/수정)
         noise_patterns = [
-            r"^\s*-\s*\d+\s*-\s*$",  # "- 1 -", "- 2 -" போன்ற வடிவங்கள்
-            r"^\s*\d+\s*$",         # 페이지 번호만 있는 경우
-            r"(?i)page\s*\d+\s*of\s*\d+", # "Page 1 of 10"
+            r"^\s*-\s*\d+\s*-\s*$",      # "- 1 -", "- 2 -"
+            r"^\s*\d+\s*$",              # 페이지 번호만 있는 경우
+            r"(?i)page\s*\d+\s*of\s*\d+" # "Page 1 of 10"
         ]
 
-    page_items = [] # 페이지의 텍스트와 테이블을 위치 정보와 함께 저장
+    page_items = []
     all_font_sizes = []
 
     with pdfplumber.open(filepath) as pdf:
         for page_num, page in enumerate(pdf.pages):
             
-            # --- 1. 테이블 추출 및 변환 ---
-            tables = page.extract_tables()
+            # --- 1. 테이블 추출 ---
+            tables = page.find_tables()
+            table_bboxes = [t.bbox for t in tables]  # 테이블 영역 bbox 저장
             for table in tables:
-                md_table = convert_table_to_markdown(table)
-                # 테이블의 y 위치를 기준으로 저장 (나중에 텍스트와 순서대로 합치기 위함)
-                table_bbox = page.find_tables()[0].bbox
-                page_items.append({'type': 'table', 'content': md_table, 'top': table_bbox[1], 'page': page_num})
+                md_table = convert_table_to_markdown(table.extract())
+                page_items.append({
+                    'type': 'table',
+                    'content': md_table,
+                    'top': table.bbox[1],
+                    'page': page_num
+                })
 
-            # --- 2. 텍스트 추출 및 노이즈 제거 ---
-            # 테이블 영역을 제외하고 텍스트 추출
-            content_without_tables = page.filter(lambda obj: obj["object_type"] == "char")
-            
-            # 폰트 사이즈 수집 및 줄 단위 텍스트 재구성
-            current_line = ""
-            current_top = -1
-            line_size = 10 # 기본 폰트 크기
+            # --- 2. 텍스트 추출 (테이블 영역 제외) ---
+            text = page.extract_text(x_tolerance=5, y_tolerance=5)
+            if text:
+                lines = text.split('\n')
+                filtered_lines = []
 
-            for char in content_without_tables.chars:
-                if current_top != char['top']:
-                    if current_line.strip():
-                        cleaned_line = clean_text_with_regex(current_line, noise_patterns)
-                        if cleaned_line.strip():
-                            page_items.append({'type': 'text', 'content': cleaned_line, 'size': line_size, 'top': current_top, 'page': page_num})
-                    
-                    current_line = ""
-                    current_top = char['top']
-                    line_size = char.get('size', 10)
-                
-                current_line += char['text']
-                all_font_sizes.append(char.get('size', 10))
-            
-            # 마지막 줄 추가
-            if current_line.strip():
-                cleaned_line = clean_text_with_regex(current_line, noise_patterns)
-                if cleaned_line.strip():
-                    page_items.append({'type': 'text', 'content': cleaned_line, 'size': line_size, 'top': current_top, 'page': page_num})
+                # 라인별 bbox 정보가 없으므로 fallback용 chars로 y 위치 확인
+                words = page.extract_words()
+                line_tops = {}
+                for w in words:
+                    line_text = w['text']
+                    top = round(w['top'])
+                    line_tops.setdefault(top, []).append(line_text)
 
+                for top, words_in_line in line_tops.items():
+                    # 테이블 bbox와 겹치지 않으면 포함
+                    if not any(b[1] <= top <= b[3] for b in table_bboxes):
+                        line_text = " ".join(words_in_line)
+                        filtered_lines.append(line_text)
 
-    # --- 3. 동적 헤더 임계값 계산 ---
+                cleaned_text = clean_text_with_regex("\n".join(filtered_lines), noise_patterns)
+                if cleaned_text.strip():
+                    page_items.append({
+                        'type': 'text',
+                        'content': cleaned_text,
+                        'size': 10,
+                        'top': 0,
+                        'page': page_num
+                    })
+            else:
+                # --- 3. chars 기반 fallback (테이블 영역 제외) ---
+                chars = page.chars
+                non_table_chars = [c for c in chars if not any(
+                    b[0] <= c["x0"] <= b[2] and b[1] <= c["top"] <= b[3] for b in table_bboxes
+                )]
+
+                tolerance = 5
+                current_line, current_top, line_size = "", -1000, 10
+                for char in non_table_chars:
+                    if abs(current_top - char['top']) > tolerance:
+                        if current_line.strip():
+                            cleaned_line = clean_text_with_regex(current_line, noise_patterns)
+                            if cleaned_line.strip():
+                                page_items.append({
+                                    'type': 'text',
+                                    'content': cleaned_line,
+                                    'size': line_size,
+                                    'top': current_top,
+                                    'page': page_num
+                                })
+                        current_line = ""
+                        current_top = char['top']
+                        line_size = char.get('size', 10)
+                    current_line += char['text']
+                    all_font_sizes.append(char.get('size', 10))
+
+                if current_line.strip():
+                    cleaned_line = clean_text_with_regex(current_line, noise_patterns)
+                    if cleaned_line.strip():
+                        page_items.append({
+                            'type': 'text',
+                            'content': cleaned_line,
+                            'size': line_size,
+                            'top': current_top,
+                            'page': page_num
+                        })
+
+    # --- 4. 동적 헤더 임계값 계산 ---
     try:
         header_font_threshold = np.percentile(all_font_sizes, header_percentile)
-    except IndexError: # 문서에 텍스트가 거의 없는 경우
-        header_font_threshold = 18 # 기본값으로 대체
+    except IndexError:
+        header_font_threshold = 18
 
-    # --- 4. 1차 청킹 (헤더 기준) ---
-    # 페이지 아이템들을 페이지 번호와 수직 위치(top) 기준으로 정렬
+    # --- 5. 1차 청킹 (헤더 기준) ---
     page_items.sort(key=lambda x: (x['page'], x['top']))
-    
     font_size_chunks = []
     current_chunk_content = ""
     current_chunk_header = f"문서 시작 ({os.path.basename(filepath)})"
@@ -174,55 +214,59 @@ def chunk(filepath: str,
         if item['type'] == 'text':
             font_size = round(item.get('size', 0))
             text = item['content']
-            
+
             if font_size >= header_font_threshold:
                 if current_chunk_content.strip():
-                    font_size_chunks.append({"header": current_chunk_header, "content": current_chunk_content.strip()})
+                    font_size_chunks.append({
+                        "header": current_chunk_header,
+                        "content": current_chunk_content.strip()
+                    })
                 current_chunk_header = text
                 current_chunk_content = ""
             else:
                 current_chunk_content += text + "\n"
-        
+
         elif item['type'] == 'table':
             current_chunk_content += "\n" + item['content'] + "\n"
 
     if current_chunk_content.strip():
-        font_size_chunks.append({"header": current_chunk_header, "content": current_chunk_content.strip()})
+        font_size_chunks.append({
+            "header": current_chunk_header,
+            "content": current_chunk_content.strip()
+        })
 
-    # --- 5. 2차 청킹 (사이즈 기준) ---
+    # --- 6. 2차 청킹 (사이즈 기준) ---
     recursive_splitter = RecursiveCharacterTextSplitter(
         chunk_size=final_chunk_size,
         chunk_overlap=final_chunk_overlap,
         separators=["\n\n", "\n", ". ", " ", ""]
     )
-    
+
     final_documents = []
     for chapter in font_size_chunks:
         header = chapter['header']
         content = chapter['content']
-        
+
         sub_chunks = recursive_splitter.split_text(content)
         for sub_chunk_content in sub_chunks:
-            if is_high_special_char_ratio(sub_chunk_content):
-                continue
+            # --- 테이블 청크 또는 테이블 포함 청크는 예외 처리 ---
+            if "table" not in header.lower() and "|" not in sub_chunk_content:
+                if is_high_special_char_ratio(sub_chunk_content):
+                    continue
             final_metadata = metadata.copy()
             final_metadata['parent_header'] = header
             doc = Document(page_content=sub_chunk_content, metadata=final_metadata)
             final_documents.append(doc)
-            
+
     return final_documents
 
 def is_high_special_char_ratio(text: str, threshold: float = 0.6) -> bool:
-    SPECIAL_CHARS = set(string.punctuation + '`~!@#$%^&*()_+-=[]{}|;:",./<>?·') # 특수문자 정의 (구두점 및 기타 기호)
-
-    total_length = len(text)
+    SPECIAL_CHARS = set(string.punctuation + '`~!@#$%^&*()_+-=[]{}|;:",./<>?·')
+    # 예외 문자 제외
+    EXCEPT_CHARS = set('□※•')
+    text_for_check = ''.join(c for c in text if c not in EXCEPT_CHARS)
+    total_length = len(text_for_check)
     if total_length == 0:
         return False
-
-    special_char_count = sum(1 for char in text if char in SPECIAL_CHARS)
-    special_char_ratio = special_char_count / total_length
-
-    if special_char_ratio > threshold:
-        print(f"---- 청크 제외됨 (특수문자 비율 {special_char_ratio:.2f}) ----")
-        print(f"제외된 청크 내용: {text}")
-    return special_char_ratio > threshold
+    special_char_count = sum(1 for c in text_for_check if c in SPECIAL_CHARS)
+    return (special_char_count / total_length) > threshold
