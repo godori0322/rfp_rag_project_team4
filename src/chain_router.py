@@ -90,8 +90,11 @@ class ChainRouter:
 
         # 전체 파이프라인 결합 - 안정적인 데이터 흐름 보장
         def log_and_pass_through(data):
-            classification = data.get('classification', 'N/A').strip()
-            print(f"✅ 라우터 분류 결과: {classification}")
+            classification_dict = data.get('classification', {})
+            classification_str = classification_dict.get('classification', 'N/A')
+            if isinstance(classification_str, str):
+                classification_str = classification_str.strip()
+            print(f"✅ 라우터 분류 결과: {classification_str}")
             return data
 
         # ✅ 전체 파이프라인
@@ -100,18 +103,18 @@ class ChainRouter:
                 history=lambda x: self.get_recent_history(x.get("history", []))  # 답변단계에서만 쓰기 위해 유지
             )
             # retriever에는 원문 input 그대로 사용
-            .assign(classification=lambda x: route_chain.invoke({"input": x["input"]}))
+            .assign(classification=lambda x: {"classification": route_chain.invoke({"input": x["input"]})})
             | RunnableLambda(log_and_pass_through)
             | RunnableBranch(
                 (lambda x: "metadata_search" in x.get("classification", ""), metadata_search_chain),
                 (lambda x: "summarization" in x.get("classification", ""), summarization_chain),
                 (lambda x: "comparison" in x.get("classification", ""), comparison_chain),
                 (lambda x: "recommendation" in x.get("classification", ""), recommendation_chain),
-                default_qa_chain  # 기본값
+                lambda x: default_qa_chain  # 기본값
             )
-        )
+        ).with_config({"callbacks": [self.tracer]})
         
-        return full_chain.with_config({"callbacks": [self.tracer]})
+        return full_chain
         
 
 
@@ -345,7 +348,7 @@ class ChainRouter:
         branch = RunnableBranch(
             (lambda x: x.get("triage_result", {}).get("type") == "single_document", single_doc_chain),
             (lambda x: x.get("triage_result", {}).get("type") == "multi_document", multi_doc_chain),
-            (lambda x: "비교 유형을 식별할 수 없습니다.")
+            lambda x: {"extracted_snippets": "비교 유형을 식별할 수 없습니다."}
         )
         return RunnablePassthrough.assign(triage_result=triage_chain) | branch
 
@@ -400,7 +403,8 @@ class ChainRouter:
         mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
 
         return (
-            {
+            RunnablePassthrough.assign(history=lambda x: x.get("history", []))  # ✅ history 안전 전달
+            | {
                 "expanded_query": query_expansion_chain,
                 "original_input": lambda x: x['input']
             }
