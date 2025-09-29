@@ -113,7 +113,7 @@ class ChainRouter:
                 history=lambda x: self.get_recent_history(x.get("history", []))  # 답변단계에서만 쓰기 위해 유지
             )
             # retriever에는 원문 input 그대로 사용
-            .assign(classification=lambda x: route_chain.invoke({"input": x["input"]}))
+            .assign(classification=route_chain)
             | RunnableLambda(log_and_pass_through)
             | RunnableBranch(
                 (lambda x: "metadata_search" in x.get("classification", ""), metadata_search_chain),
@@ -147,7 +147,9 @@ class ChainRouter:
     def _create_default_qa_chain(self):
         """## RFP 관련 기본 QA 체인 (Route 2, Fallback Route) - 메타데이터 참조 """
         
-        def get_context_with_metadata(question: str) -> str:
+        def get_context_with_metadata(x: dict) -> str:
+            # 함수가 딕셔너리 'x'를 받도록 하여 'input' 키에 접근하도록 통일합니다.
+            question = x["input"]
             print(f"--- INFO (Default QA): '{question}'에 대한 문서 검색 수행 ---")
             docs = self.find_documents(question)
             if not docs:
@@ -178,13 +180,13 @@ class ChainRouter:
                 "- **정보 부재 시:** 여러 번 확인했음에도 불구하고 컨텍스트에 답변의 근거가 될 내용이 정말로 없다면, 그때서야 '제공된 문서에서는 질문에 대한 명확한 정보를 찾을 수 없었습니다.'라고 답변하세요."
             ),
             MessagesPlaceholder("history"),  # ✅ 답변 단계에서만 history 반영
-            ("human", "[질문]: {question}\n\n[컨텍스트]:\n{context}")
+            ("human", "[질문]: {input}\n\n[컨텍스트]:\n{context}")
         ])
 
         return (
             {
-                "context": lambda x: get_context_with_metadata(x["input"]),  # retriever는 원문
-                "question": lambda x: x["input"],
+                "context": get_context_with_metadata,
+                "input": lambda x: x["input"],
                 "history": lambda x: x.get("history", []),
             }
             | prompt
@@ -200,7 +202,7 @@ class ChainRouter:
     def _create_summarization_chain(self):
         """## 정보 요약 체인 (Route 3)"""
         
-        def get_documents(x):
+        def get_documents(x: dict) -> List[Document]:
             question = x['input']
             print(f"--- INFO (Summarization): '{question}'에 대한 문서 검색 수행 ---")
             docs = self.find_documents(question)
@@ -255,17 +257,33 @@ class ChainRouter:
             "--- 끝 ---\n\n"
             "최종 사업 요약 브리핑:")
         ])
-        # 합쳐진 부분 요약들을 text 변수에 매핑하여 reduce_prompt에 전달
-        reduce_chain = (
-            RunnablePassthrough.assign(context=RunnableLambda(
-                lambda summaries: "\n\n---\n\n".join(summaries)
-            )
-            | reduce_prompt | self.llm | StrOutputParser()
-        )
-        )
+        ## 수정된 부분 ##
+        # 'history'가 유실되는 문제를 해결하기 위해 데이터 흐름을 재구성했습니다.
+        # RunnablePassthrough.assign을 사용하여 파이프라인 전반에 걸쳐 'input', 'history' 등의
+        # 원본 데이터를 유지하면서 새로운 키('docs', 'summaries', 'context')를 추가하는 방식을 사용합니다.
         
-        # map의 결과(문자열 리스트)를 reduce가 처리할 수 있는 형태(단일 문자열)로 변환하는 단계를 추가
-        return (RunnableLambda(get_documents) | map_chain.map() | reduce_chain)
+        # 1. 문서 검색 결과를 'docs' 키에 할당 (원본 데이터 유지)
+        summarization_pipeline = RunnablePassthrough.assign(docs=get_documents)
+        
+        # 2. 'docs'에 대해 map_chain을 실행하고, 결과를 'summaries' 키에 할당
+        summarization_pipeline = summarization_pipeline.assign(
+            summaries=lambda x: map_chain.map().invoke(x['docs'])
+        )
+
+        # 3. 'summaries'를 하나의 문자열로 합쳐 'context' 키에 할당
+        def combine_summaries(x: dict) -> str:
+            summaries = x['summaries']
+            # 검색된 문서가 없는 경우의 처리
+            if len(summaries) == 1 and summaries[0] == "NO_DOCS_FOUND":
+                return "요약을 위한 관련 문서를 찾지 못했습니다."
+            return "\n\n---\n\n".join(summaries)
+
+        summarization_pipeline = summarization_pipeline.assign(
+            context=combine_summaries
+        )
+
+        # 4. 최종적으로 모든 키가 포함된 딕셔너리를 reduce_prompt에 전달
+        return summarization_pipeline | reduce_prompt | self.llm | StrOutputParser()
 
 
 
@@ -291,10 +309,10 @@ class ChainRouter:
                 질문: "부산관광공사 사업에서 '대결 기능'과 '협조 기능'을 비교해줘"
                 JSON: {{"type": "single_document", "base_document": "부산관광공사 사업", "topic_A": "대결 기능", "topic_B": "협조 기능", "criteria": "전반적인 특징"}}
 
-                사용자 질문: {question}
+                사용자 질문: {input}
                 JSON 출력: """
         )
-        triage_chain = {"question": lambda x: x['input']} | triage_prompt | self.llm | triage_parser
+        triage_chain = triage_prompt | self.llm | triage_parser
 
         # 2-1: 다중 문서 비교 로직
         def get_context_for_multi_doc(item_name: str) -> str:
@@ -363,7 +381,12 @@ class ChainRouter:
             (lambda x: x.get("triage_result", {}).get("type") == "multi_document", multi_doc_chain),
             lambda x: {"extracted_snippets": "비교 유형을 식별할 수 없습니다."}
         )
-        return RunnablePassthrough.assign(triage_result=triage_chain, history=lambda x: x.get("history", [])) | branch
+        return (
+            RunnablePassthrough.assign(
+                triage_result=triage_chain, 
+                history=lambda x: x.get("history", []) # history를 명시적으로 전달
+            ) | branch
+        )
 
 
 
@@ -377,11 +400,11 @@ class ChainRouter:
         query_expansion_prompt = ChatPromptTemplate.from_template(
             "당신은 B2G 사업 검색 전문가입니다. 사용자의 요청을 '핵심 기술', '사업 분야', '프로젝트 유형'의 관점에서 분석하여, "
             "벡터 검색에 가장 효과적인 검색 키워드 3개를 쉼표(,)로 구분하여 생성하세요.\n\n"
-            "사용자 요청: {question}\n"
+            "사용자 요청: {input}\n"
             "검색 키워드:"
         )
         
-        query_expansion_chain = {"question": lambda x: x['input']} | query_expansion_prompt | self.llm | StrOutputParser()
+        query_expansion_chain = query_expansion_prompt | self.llm | StrOutputParser()
 
         
         def format_docs(docs: List[Document]) -> str:
@@ -399,7 +422,7 @@ class ChainRouter:
         recommendation_prompt = ChatPromptTemplate.from_messages([
             ("system",
             "당신은 '검색된 유사 사업 목록'만을 사용하여 사용자의 요청과 유사한 사업을 추천하는 B2G 사업 분석가입니다.\n\n"
-            "**사용자 원본 요청:**\n{original_input}\n\n"
+            "**사용자 원본 요청:**\n{input}\n\n"
             "**검색된 유사 사업 목록:**\n{context}\n\n"
             "--- (매우 중요한 규칙) ---\n"
             "1. **역할 준수:** 당신의 유일한 임무는 '검색된 유사 사업 목록'에 있는 사업들을 '사용자 원본 요청'과 비교하여 추천 목록을 만드는 것입니다.\n"
@@ -415,16 +438,13 @@ class ChainRouter:
         
         mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
 
-        return (
-            RunnablePassthrough.assign(history=lambda x: x.get("history", []))  # ✅ history 안전 전달
-            | {
-                "expanded_query": query_expansion_chain,
-                "original_input": lambda x: x['input']
-            }
-            | RunnablePassthrough.assign(
-                context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
-            )
-            | recommendation_prompt
-            | self.llm
-            | StrOutputParser()
+        recommendation_pipeline = RunnablePassthrough.assign(
+            expanded_query=query_expansion_chain # 'input'을 받아 'expanded_query' 생성
+        ).assign(
+            # 생성된 'expanded_query'를 사용해 MMR 검색 후 'context' 생성
+            context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
         )
+        
+        # 최종적으로 'input', 'history', 'expanded_query', 'context'가 모두 포함된
+        # 딕셔너리가 recommendation_prompt로 전달됩니다.
+        return recommendation_pipeline | recommendation_prompt | self.llm | StrOutputParser()
