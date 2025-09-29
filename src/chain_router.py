@@ -158,7 +158,7 @@ class ChainRouter:
         ])
         
         return (
-            RunnablePassthrough.assign(context=RunnableLambda(lambda x:get_context(self.find_self_query_documents(x['refined_query']))))
+            RunnablePassthrough.assign(context=RunnableLambda(lambda x:get_context(self.find_self_query_documents(x['input']))))
             | prompt | self.llm | StrOutputParser()
         )
         
