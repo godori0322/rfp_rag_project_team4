@@ -236,11 +236,6 @@ class ChainRouter:
             ("human", "[질문]: {input}\n\n[컨텍스트]:\n{context}")
         ])
 
-        def answer(x):
-            print(x)
-            print(type(x))
-            return x
-
         return (
             {
                 "context": get_context,
@@ -250,7 +245,6 @@ class ChainRouter:
             | prompt
             | self.llm
             | StrOutputParser()
-            | RunnableLambda(answer)
         )
 
 
