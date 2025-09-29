@@ -31,15 +31,6 @@ class ChainRouter:
         return history[-window_size:] if history else []
 
     def create_router_chain(self):
-        # 컨텍스트 프롬프트: 이전 대화 맥락 유지
-        contextualize_prompt = ChatPromptTemplate.from_messages([
-            ("system", "너는 대화 맥락을 반영해서 사용자의 현재 질문을 독립적인 형태로 재구성하는 도우미야. 이전 대화 내용을 참고해서, 현재 질문이 더 명확해지도록 만들어줘."),
-            MessagesPlaceholder("history"),
-            ("human", "{input}")
-        ])
-
-        contextualizer_chain = contextualize_prompt | self.llm | StrOutputParser()
-
         # 라우터 프롬프트: 쿼리 의도 분류
         route_prompt = ChatPromptTemplate.from_template(
             """당신은 사용자의 질문 의도를 5개의 카테고리 중 하나로 완벽하게 분류하는 전문가입니다.
@@ -90,28 +81,29 @@ class ChainRouter:
         
         route_chain = route_prompt | self.llm | StrOutputParser()
         
-    # 3단계: 각 의도에 맞는 전문화된 체인 정의
-        general_chain = self._create_general_chain()
+    # 각 의도에 맞는 전문화된 체인 정의
+        metadata_search_chain = self._create_metadata_search_chain()
         summarization_chain = self._create_summarization_chain()
         comparison_chain = self._create_comparison_chain()
         recommendation_chain = self._create_recommendation_chain()
         default_qa_chain = self._create_default_qa_chain()
 
-        # 4단계: 전체 파이프라인 결합 - 안정적인 데이터 흐름 보장
+        # 전체 파이프라인 결합 - 안정적인 데이터 흐름 보장
         def log_and_pass_through(data):
             classification = data.get('classification', 'N/A').strip()
             print(f"✅ 라우터 분류 결과: {classification}")
             return data
 
+        # ✅ 전체 파이프라인
         full_chain = (
             RunnablePassthrough.assign(
-                history=lambda x: self.get_recent_history(x.get("history", []))
+                history=lambda x: self.get_recent_history(x.get("history", []))  # 답변단계에서만 쓰기 위해 유지
             )
-            | RunnablePassthrough.assign(refined_query=contextualizer_chain)
-            .assign(classification=lambda x: route_chain.invoke({"input": x['refined_query']}))
+            # retriever에는 원문 input 그대로 사용
+            .assign(classification=lambda x: route_chain.invoke({"input": x["input"]}))
             | RunnableLambda(log_and_pass_through)
             | RunnableBranch(
-                (lambda x: "general" in x.get("classification", ""), general_chain),
+                (lambda x: "metadata_search" in x.get("classification", ""), metadata_search_chain),
                 (lambda x: "summarization" in x.get("classification", ""), summarization_chain),
                 (lambda x: "comparison" in x.get("classification", ""), comparison_chain),
                 (lambda x: "recommendation" in x.get("classification", ""), recommendation_chain),
@@ -125,7 +117,7 @@ class ChainRouter:
 
 
 
-    def _create_general_chain(self):
+    def _create_metadata_search_chain(self):
         """## 일반 대화 체인 (Route 1)"""
         prompt = ChatPromptTemplate.from_messages([
             ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. RFP 문서가 아닌 일반적인 주제에 대해 답변해줘."),
@@ -171,6 +163,7 @@ class ChainRouter:
                 "- **출처 제시:** 모든 답변은 반드시 [컨텍스트]에 기반해야 하며, 어떤 문서에서 정보를 찾았는지 명시해야 합니다. (예: '「2024년 이러닝시스템 운영 용역」 문서에 따르면...')\n"
                 "- **정보 부재 시:** 여러 번 확인했음에도 불구하고 컨텍스트에 답변의 근거가 될 내용이 정말로 없다면, 그때서야 '제공된 문서에서는 질문에 대한 명확한 정보를 찾을 수 없었습니다.'라고 답변하세요."
             ),
+            MessagesPlaceholder("history"),  # ✅ 답변 단계에서만 history 반영
             ("human", "[질문]: {question}\n\n[컨텍스트]:\n{context}")
         ])
 
@@ -222,18 +215,23 @@ class ChainRouter:
         map_chain = {"text": lambda doc: doc.page_content} | map_prompt | self.llm | StrOutputParser()
 
         # Reduce 
-        reduce_prompt = ChatPromptTemplate.from_template(
-            "당신은 B2G 사업 수주 전략을 수립하는 수석 컨설턴트입니다. 아래에 흩어져 있는 정보들을 종합하여, 의사결정을 위한 최종 '사업 요약 브리핑'을 작성해 주십시오.\n\n"
+        reduce_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+            "당신은 B2G 사업 수주 전략을 수립하는 수석 컨설턴트입니다. "
+            "아래에 흩어져 있는 정보들을 종합하여, 의사결정을 위한 최종 '사업 요약 브리핑'을 작성해 주십시오.\n\n"
             "**브리핑 작성 가이드라인:**\n"
             "1. **핵심 요약 (Executive Summary):** 가장 먼저 사업명, 발주기관, 예산, 기간, 핵심 기술/과업을 한두 문장으로 요약하여 제시하세요.\n"
             "2. **본문:** '사업 목표', '주요 과업 범위', '예산 및 기간', '제안 시 주요 고려사항(평가방식, 참여자격, 특이사항 등)' 순서로 구조화하여 상세히 설명하세요.\n"
-  
-            "3. **확인 필요한 정보:** 만약 예산, 기간 등 **의사결정에 필수적인 정보가 누락되었다면, 반드시 '※ 확인 필요한 핵심 정보' 항목을 만들어 명시**해야 합니다.\n\n"
+            "3. **확인 필요한 정보:** 만약 예산, 기간 등 **의사결정에 필수적인 정보가 누락되었다면, 반드시 '※ 확인 필요한 핵심 정보' 항목을 만들어 명시**해야 합니다."
+            ),
+            # ✅ 여기서 과거 대화 이력을 반영
+            MessagesPlaceholder("history"),
+            ("human",
             "--- 부분 정보 목록 ---\n"
             "{text}\n"
             "--- 끝 ---\n\n"
-            "최종 사업 요약 브리핑:"
-        )
+            "최종 사업 요약 브리핑:")
+        ])
         # 합쳐진 부분 요약들을 text 변수에 매핑하여 reduce_prompt에 전달
         reduce_chain = {"text": lambda summaries: "\n\n---\n\n".join(summaries)} | reduce_prompt | self.llm | StrOutputParser()
         
@@ -278,12 +276,14 @@ class ChainRouter:
             if not docs: return f"'{item_name}' 정보를 찾을 수 없습니다."
             return "\n\n".join(self.find_contexts(docs))
 
-        multi_doc_prompt = ChatPromptTemplate.from_template(
+        multi_doc_prompt = ChatPromptTemplate.from_messages([
+            ("system", "두 사업을 비교 분석하세요."),
+            MessagesPlaceholder("history"),  # ✅ 답변 생성에서만 history 반영
+            ("human",
             "**비교 기준:** {criteria}\n\n"
             "**[사업 A: {item_A}]**\n{context_A}\n\n"
-            "**[사업 B: {item_B}]**\n{context_B}\n\n"
-            "위 두 사업의 정보를 바탕으로, '비교 기준'에 맞춰 각각의 내용을 요약하고 비교 결과를 표(Markdown Table) 형식으로 명확하게 제시해주십시오. 만약 특정 정보를 찾을 수 없다면 '정보 확인 불가' 라고 명시하세요."
-        )
+            "**[사업 B: {item_B}]**\n{context_B}")
+        ])
         
         multi_doc_chain = RunnablePassthrough.assign(
             item_A=lambda x: x["triage_result"].get("item_A", "알 수 없는 항목 A"),
@@ -323,9 +323,11 @@ class ChainRouter:
             
             return {"extracted_snippets": extracted_snippets, **triage_result}
 
-        single_doc_prompt = ChatPromptTemplate.from_template(
-            "**기준 문서:** {base_document}\n**비교 기준:** {criteria}\n\n**추출된 정보:**\n---\n{extracted_snippets}\n---\n\n위 정보를 바탕으로 '{topic_A}'와 '{topic_B}'를 비교 분석하고 요약해줘."
-        )
+        single_doc_prompt = ChatPromptTemplate.from_messages([
+            ("system", "문서 내 두 개념을 비교 분석하세요."),
+            MessagesPlaceholder("history"),  # ✅ 답변 생성에서만 history 반영
+            ("human", "**기준:** {criteria}\n\n{extracted_snippets}")
+        ])
         single_doc_chain = RunnableLambda(retrieve_and_extract_for_single_doc) | single_doc_prompt | self.llm | StrOutputParser()
 
         branch = RunnableBranch(
@@ -366,7 +368,8 @@ class ChainRouter:
             )
             
         # Reduce 단계 (Recommendation)
-        recommendation_prompt = ChatPromptTemplate.from_template(
+        recommendation_prompt = ChatPromptTemplate.from_messages([
+            ("system",
             "당신은 '검색된 유사 사업 목록'만을 사용하여 사용자의 요청과 유사한 사업을 추천하는 B2G 사업 분석가입니다.\n\n"
             "**사용자 원본 요청:**\n{original_input}\n\n"
             "**검색된 유사 사업 목록:**\n{context}\n\n"
@@ -375,9 +378,12 @@ class ChainRouter:
             "2. **직접 답변 금지:** 절대로 '사용자 원본 요청'에 대해 당신의 자체 지식으로 직접 답변을 생성하면 안 됩니다.\n"
             "3. **근거 기반 추천:** '검색된 유사 사업 목록'을 바탕으로, 가장 유사도가 높다고 생각하는 순서대로 최대 3개의 사업을 추천하고, 어떤 점이 유사한지 명확한 근거를 제시해야 합니다.\n"
             "4. **결과 없음 처리:** 만약 '검색된 유사 사업 목록'에 '추천할 만한 유사 사업을 찾지 못했습니다.'라는 내용이 있다면, 다른 말을 덧붙이지 말고 \"요청하신 내용과 유사한 사업을 찾을 수 없었습니다.\"라고만 답변하십시오.\n"
-            "--- (규칙 끝) ---\n\n"
-            "**추천 목록 (위 규칙에 따라 작성):**"
-        )
+            "--- (규칙 끝) ---"
+            ),
+            # ✅ 여기서 멀티턴 맥락(history) 반영
+            MessagesPlaceholder("history"),
+            ("human", "**추천 목록 (위 규칙에 따라 작성):**")
+        ])
         
         mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
 
