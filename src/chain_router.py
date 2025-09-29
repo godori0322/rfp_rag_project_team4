@@ -337,7 +337,7 @@ class ChainRouter:
         def get_context_for_multi_doc(item_name: str) -> str:
             if not item_name: return "비교 대상이 질문에서 추출되지 않았습니다."
             print(f"--- INFO (Multi-Doc): '{item_name}'에 대한 지능형 문서 검색 수행 ---")
-            docs = self.retriever.invoke(item_name)
+            docs = self.find_self_query_documents(item_name)
             if not docs: return f"'{item_name}' 정보를 찾을 수 없습니다."
             return "\n\n".join(self.find_contexts(docs))
 
@@ -364,6 +364,7 @@ class ChainRouter:
             base_doc_name = triage_result.get("base_document")
             topic_A = triage_result.get("topic_A")
             topic_B = triage_result.get("topic_B")
+            history = input_dict.get("history", [])
             
             if not all([base_doc_name, topic_A, topic_B]):
                 print("--- WARNING (Single-Doc): LLM이 비교 대상을 정확히 추출하지 못했습니다. ---")
@@ -373,12 +374,12 @@ class ChainRouter:
                     "topic_A": topic_A or "알 수 없음",
                     "topic_B": topic_B or "알 수 없음",
                     "criteria": triage_result.get("criteria", "알 수 없음"),
+                    "history": history
                 }
                 
             print(f"--- INFO (Single-Doc): 기준 문서 '{base_doc_name}'의 컨텍스트 검색 ---")
-            base_docs = self.retriever.invoke(base_doc_name)
-            if not base_docs: return {"extracted_snippets": f"기준 문서 '{base_doc_name}'를 찾을 수 없습니다.", **triage_result}
-            
+            base_docs = self.find_self_query_documents(base_doc_name)
+            if not base_docs: return { "extracted_snippets": f"기준 문서 '{base_doc_name}'를 찾을 수 없습니다.", "history": history, **triage_result}            
             local_context = "\n\n".join(self.find_contexts(base_docs))
             
             print(f"--- INFO (Single-Doc): '{topic_A}'와 '{topic_B}'에 대한 정보 추출 ---")
@@ -386,7 +387,7 @@ class ChainRouter:
             snippet_extractor = extraction_prompt | self.llm | StrOutputParser()
             extracted_snippets = snippet_extractor.invoke({"context": local_context, "topic_A": topic_A, "topic_B": topic_B})
             
-            return {"extracted_snippets": extracted_snippets, **triage_result}
+            return {"extracted_snippets": extracted_snippets, "history": history, **triage_result}
 
         single_doc_prompt = ChatPromptTemplate.from_messages([
             ("system", "문서 내 두 개념을 비교 분석하세요."),
