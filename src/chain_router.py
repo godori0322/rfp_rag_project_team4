@@ -121,7 +121,7 @@ class ChainRouter:
         """## 일반 대화 체인 (Route 1)"""
         prompt = ChatPromptTemplate.from_messages([
             ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. RFP 문서가 아닌 일반적인 주제에 대해 답변해줘."),
-            ("human", "{refined_query}")
+            ("human", "{query}")
         ])
         return prompt | self.llm | StrOutputParser()
 
@@ -167,7 +167,16 @@ class ChainRouter:
             ("human", "[질문]: {question}\n\n[컨텍스트]:\n{context}")
         ])
 
-        return ({"context": lambda x: get_context_with_metadata(x["refined_query"]), "question": lambda x: x["refined_query"]} | prompt | self.llm | StrOutputParser())
+        return (
+            {
+                "context": lambda x: get_context_with_metadata(x["input"]),  # retriever는 원문
+                "question": lambda x: x["input"],
+                "history": lambda x: x.get("history", []),
+            }
+            | prompt
+            | self.llm
+            | StrOutputParser()
+        )
 
 
 
@@ -178,7 +187,7 @@ class ChainRouter:
         """## 정보 요약 체인 (Route 3)"""
         
         def get_documents(x):
-            question = x['refined_query']
+            question = x['input']
             print(f"--- INFO (Summarization): '{question}'에 대한 문서 검색 수행 ---")
             docs = self.find_documents(question)
             
@@ -265,8 +274,7 @@ class ChainRouter:
                 사용자 질문: {question}
                 JSON 출력: """
         )
-        # 이제 'refined_query'를 입력으로 받습니다.
-        triage_chain = {"question": lambda x: x['refined_query']} | triage_prompt | self.llm | triage_parser
+        triage_chain = {"question": lambda x: x['input']} | triage_prompt | self.llm | triage_parser
 
         # 2-1: 다중 문서 비교 로직
         def get_context_for_multi_doc(item_name: str) -> str:
@@ -353,7 +361,7 @@ class ChainRouter:
             "검색 키워드:"
         )
         
-        query_expansion_chain = {"question": lambda x: x['refined_query']} | query_expansion_prompt | self.llm | StrOutputParser()
+        query_expansion_chain = {"question": lambda x: x['input']} | query_expansion_prompt | self.llm | StrOutputParser()
 
         
         def format_docs(docs: List[Document]) -> str:
@@ -390,7 +398,7 @@ class ChainRouter:
         return (
             {
                 "expanded_query": query_expansion_chain,
-                "original_input": lambda x: x['refined_query']
+                "original_input": lambda x: x['input']
             }
             | RunnablePassthrough.assign(
                 context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
