@@ -38,9 +38,10 @@ class Chatbot:
         self.tracer = LangChainTracer(project_name=LangSmithConfig.LANGCHAIN_PROJECT)
         self.initialize_components()
         self.history = self.load_history()
-        self.router = ChainRouter(llm=self.llm,  retriever=self.retriever, vectorstore=self.vectorstore, tracer=self.tracer)
+        self.router = ChainRouter(llm=self.llm,  retriever=self.retriever, self_query_retriever=self.self_query_retriever, vectorstore=self.vectorstore, tracer=self.tracer)
         self.chain = self.router.create_router_chain()
         self.rag_handler = RAGCallbackHandler()
+
 
     def initialize_components(self):
         """Initializes the core components like LLM, embeddings, and retriever."""
@@ -51,7 +52,21 @@ class Chatbot:
             collection_name=Config.RFP_COLLECTION
         )
         self.llm = ChatOpenAI(model=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
+        self.retriever = self.create_default_retriever()
+        self.self_query_retriever = self.create_self_query_retriever()
 
+
+    def create_default_retriever(self):
+        base_retriever = self.vectorstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={"k": Config.FIRST_TOP_K, "fetch_k": Config.FETCH_K, "lambda_mult": Config.LAMBDA_MULT}  
+        )
+        reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
+        compressor = CrossEncoderReranker(model=reranker_model, top_n=Config.TOP_K)
+        return ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
+
+
+    def create_self_query_retriever(self):
         base_retriever = SelfQueryRetriever.from_llm(
             self.llm,
             self.vectorstore,
@@ -82,10 +97,10 @@ class Chatbot:
             search_kwargs={"k": Config.FIRST_TOP_K},
             verbose=True
         )
-
         reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
         compressor = CrossEncoderReranker(model=reranker_model, top_n=Config.TOP_K)
-        self.retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
+        return ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
+        
 
     def find_documents(self, question):
         return self.router.find_documents(question)

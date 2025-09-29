@@ -15,14 +15,20 @@ from langchain.retrievers.self_query.base import SelfQueryRetriever
 
 
 class ChainRouter:
-    def __init__(self, llm, retriever, vectorstore, tracer):
+    def __init__(self, llm, retriever, self_query_retriever, vectorstore, tracer):
         self.llm = llm
         self.retriever = retriever
+        self.self_query_retriever = self_query_retriever
         self.vectorstore = vectorstore
         self.tracer = tracer
 
     def find_documents(self, question):
+        print(f"--- INFO: '{question}'에 대한 지능형 문서 검색 수행 ---")
         return self.retriever.invoke(question)
+
+    def find_self_query_documents(self, question):
+        print(f"--- INFO: '{question}'에 대한 지능형 메타데이터 검색 수행 ---")
+        return self.self_query_retriever.invoke(question)
     
     def find_contexts(self, docs):
         return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
@@ -33,8 +39,12 @@ class ChainRouter:
     def create_router_chain(self):
         # 라우터 프롬프트: 쿼리 의도 분류
         route_prompt = ChatPromptTemplate.from_template(
-            """당신은 사용자의 질문 의도를 5개의 카테고리 중 하나로 완벽하게 분류하는 전문가입니다.
-            주어진 질문을 분석하여 가장 적절한 카테고리 이름 하나만 답변해야 합니다.
+            """사용자의 질문을 분석하여, 질문의 의도를 다음 5가지 카테고리 중 하나로 분류하세요.
+            `metadata_search`: 특정 조건(기관, 사업명 등)으로 문서를 찾아달라는 요청.
+            `summarization`: 문서의 핵심 내용을 요약해달라는 요청.
+            `comparison`: 다중 문서 비교나, 단일 문서내의 내용을 비교해달라는 요청.
+            `recommendation`: 특정 사업과 유사한 다른 사업을 추천해달라는 요청.
+            `default_qa`: RFP 문서 내용에 대한 구체적인 질문 또는 위 카테고리에 속하지 않는 모든 RFP 관련 질문.
 
             # 카테고리 설명:
             `metadata_search`: 특정 RFP 문서의 메타데이터(사업명, 사업 금액, 발주 기관, 공고 번호, 날짜 등) 자체를 찾아달라는 요청.
@@ -78,10 +88,10 @@ class ChainRouter:
             질문: {input}
             분류:"""
         )
-        
+
         route_chain = route_prompt | self.llm | StrOutputParser()
         
-    # 각 의도에 맞는 전문화된 체인 정의
+    # 3단계: 각 의도에 맞는 전문화된 체인 정의
         metadata_search_chain = self._create_metadata_search_chain()
         summarization_chain = self._create_summarization_chain()
         comparison_chain = self._create_comparison_chain()
@@ -128,21 +138,30 @@ class ChainRouter:
         
 
 
-
-
     def _create_metadata_search_chain(self):
-        """## 일반 대화 체인 (Route 1)"""
+        """## 메타데이터 검색 체인 (Route 1)"""
+        def get_context(docs) -> str:
+            if not docs:
+                print("--- WARNING (metadata_search): 관련된 문서를 찾지 못했습니다. ---")
+                return "관련된 문서를 찾을 수 없습니다."
+            context_parts = []
+            for doc in docs:
+                metadata_str = json.dumps(doc.metadata, ensure_ascii=False, indent=2)
+                part = (f"---\n[문서 정보]:\n{metadata_str}\n\n[문서 본문]:\n{doc.page_content}\n---")
+                context_parts.append(part)
+            return "\n\n".join(context_parts)
+        
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. RFP 문서가 아닌 일반적인 주제에 대해 답변해줘."),
+            ("system", "너는 사용자와 자유롭게 대화하는 친절한 AI 어시스턴트야. 특정 조건(기관, 사업명 등)으로 문서를 찾아달라는 요청."),
             MessagesPlaceholder("history"),  # ✅ 답변 단계에서만 history 반영
-            ("human", "{input}")
+            ("human", "[질문]: {input}\n\n[컨텍스트]:\n{context}")
         ])
-        return prompt | self.llm | StrOutputParser()
-
-
-
-
-
+        
+        return (
+            RunnablePassthrough.assign(context=RunnableLambda(lambda x:get_context(self.find_self_query_documents(x['refined_query']))))
+            | prompt | self.llm | StrOutputParser()
+        )
+        
 
     def _create_default_qa_chain(self):
         """## RFP 관련 기본 QA 체인 (Route 2, Fallback Route) - 메타데이터 참조 """
