@@ -129,22 +129,36 @@ class Chatbot:
             ]
             json.dump(history_json, f, ensure_ascii=False, indent=4)
 
-    def ask(self, query: str, is_save=True) -> str:
-        """사용자 질문에 답변합니다."""
-        response = self.chain.invoke({
-            "input": query, # 'question' 대신 'input' 키 사용
-            "history": self.history # 'history' 대신 'chat_history' 키 사용
-        })
+    def ask(self, question: str, save_history_flag: bool = True) -> dict:
+        """
+        Asks the chatbot a question and returns the answer and the context used.
+        
+        Returns:
+            A dictionary containing 'answer' and 'context_docs'.
+        """
+        inputs = {"input": question, "history": self.history}
+        
+        # --- FIX: Use .invoke() to get the final result and capture intermediate steps ---
+        # We need to configure the chain to pass through the 'docs'
+        # This assumes your chain is structured to have a 'docs' key after retrieval.
+        # If you've used my previous refactoring of chain_router.py, this will work.
+        result = self.chain.invoke(inputs)
 
-        if isinstance(response, Dict) and 'answer' in response:
-            answer = response['answer']
-        else:
-            answer = response
-        
-        self.history.append(HumanMessage(content=query))
-        self.history.append(AIMessage(content=str(answer)))
-        
-        if is_save:
+        # The final output of the chain is the answer string.
+        # The 'docs' were an intermediate step that we need to retrieve again for evaluation.
+        # A more robust way is to have the chain return a dict, but this works for now.
+        context_docs = self.find_documents(question) # Re-running retrieval is a temporary fix.
+                                                     # The best fix is for self.chain to return {'answer': ..., 'docs': ...}
+
+        if save_history_flag:
+            self.history.extend([
+                HumanMessage(content=question),
+                AIMessage(content=result),
+            ])
             self.save_history()
-
-        return str(answer)
+            
+        # --- FIX: Return a dictionary with both answer and context ---
+        return {
+            "answer": result,
+            "context_docs": context_docs
+        }

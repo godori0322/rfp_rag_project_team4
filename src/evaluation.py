@@ -53,7 +53,7 @@ def generate_ragas_dataset(test_questions_with_ground_truths: list[dict]):
     """
     제공된 테스트 질문과 정답을 기반으로 RAGAS 평가용 데이터셋을 생성합니다.
     """
-    ragas_data = { 'question': [], 'answer': [], 'contexts': [], 'reference': []}   
+    ragas_data = { 'question': [], 'answer': [], 'contexts': [], 'ground_truth': []} # FIX: 'reference' should be 'ground_truth' for Ragas
 
     for item in test_questions_with_ground_truths:
         question = item['question']
@@ -63,31 +63,22 @@ def generate_ragas_dataset(test_questions_with_ground_truths: list[dict]):
         print('======= chatbot_input ==========')
         print(question)
         
-        try:
-            bot_response = bot.ask(question, False)
-            bot_contexts = bot.find_contexts(bot.find_documents(question))
-        except Exception as e:
-            print(f"첫 번째 시도 실패: {e}")
-            print("두 번째 시도 (재호출)...")
-            try:
-                bot_response = bot.ask(question, False)
-                bot_contexts = bot.find_contexts(bot.find_documents(question))
-                print("두 번째 시도 성공.")
-            except Exception as e:
-                print(f"두 번째 시도 실패: {e}")
-                print("세 번째 시도 (재호출)...")
-                bot_response = bot.ask(question, False)
-                bot_contexts = bot.find_contexts(bot.find_documents(question))
-                print("세 번째 시도 성공.")
+        # --- FIX: Capture the dictionary returned by bot.ask ---
+        response_dict = bot.ask(question, False)
+        bot_answer = response_dict["answer"]
+        # Get the actual documents used for context
+        context_docs = response_dict["context_docs"] 
+        # Convert Document objects to a list of strings for RAGAS
+        bot_contexts = [doc.page_content for doc in context_docs]
 
         print('======= chatbot_response ==========')
-        print(bot_response)
+        print(bot_answer)
         print('===================================')
         
         ragas_data['question'].append(question)
-        ragas_data['answer'].append(bot_response)
+        ragas_data['answer'].append(bot_answer)
         ragas_data['contexts'].append(bot_contexts)
-        ragas_data['reference'].append(ground_truth)
+        ragas_data['ground_truth'].append(ground_truth) # FIX: Use 'ground_truth'
 
     return Dataset.from_dict(ragas_data)
 
@@ -101,7 +92,7 @@ if __name__ == "__main__":
     #     {'question': "제안서 작성 시 유의해야 할 주요 사항은 무엇인가요?", 
     #      'ground_truth': "제안서 작성 시 유의사항으로는 제안서의 효력 유지, 제안서 내용의 명확성, 제안서 구성의 일관성, 객관적인 증빙자료 제시, 제안서 내용 변경 금지, 기한 내 제출, 제출된 제안서의 권리 귀속 등이 있습니다. 또한, 제출된 제안서는 반환되지 않으며, 제안서 작성 및 제출과 관련된 비용은 제안사가 부담해야 합니다."},
     # ]
-    df = pd.read_csv("data/evaluation2.csv")
+    df = pd.read_csv("data/evaluation.csv")
     test_questions_with_ground_truths = df.to_dict(orient='records')
    
     print("RAGAS 데이터셋 생성 중...")
@@ -112,8 +103,11 @@ if __name__ == "__main__":
     result = evaluate(
         dataset=ragas_dataset,
         metrics=metrics,
-        llm=ragas_llm,
-        embeddings=ragas_embeddings,
+        # llm and embeddings are now passed to metrics directly, so these are optional
     )
     print("RAGAS 평가 완료.")
-    print(result)
+    # --- FIX: Convert result to a DataFrame for better readability ---
+    result_df = result.to_pandas()
+    print(result_df)
+    result_df.to_csv("ragas_evaluation_results.csv", index=False)
+    print("Evaluation results saved to ragas_evaluation_results.csv")
