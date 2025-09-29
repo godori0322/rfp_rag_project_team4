@@ -42,14 +42,19 @@ def create_vectorstore():
 
     print("\n벡터 DB에 문서 추가를 시작합니다...")
     cnt = 1
-    for doc_chunks in doc_group:
-        # None 메타데이터를 방지하는 코드
+    batch_size = 100   # ✅ 안전한 배치 크기 (조정 가능)
+
+    for doc_chunks in doc_group:  # doc_group: List[List[Document]]
         for chunk in doc_chunks:
             if chunk.metadata is None:
                 chunk.metadata = {}
+
+        # 🔹 batch 단위로 나눠서 추가
+        for i in range(0, len(doc_chunks), batch_size):
+            batch = doc_chunks[i:i+batch_size]
+            vector_store.add_documents(batch)
+            print(f" -> {cnt}번 문서 그룹 / batch {i//batch_size + 1} 추가 완료 (청크 {len(batch)}개)")
         
-        vector_store.add_documents(doc_chunks)
-        print(f"{cnt}번 문서 그룹 추가 완료. (청크 갯수: {len(doc_chunks)})")
         cnt += 1
 
     print("\n모든 문서의 벡터 변환 및 저장이 완료되었습니다.")

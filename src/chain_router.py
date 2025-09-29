@@ -34,7 +34,7 @@ class ChainRouter:
         """## 변경된 로직: 라우팅 로직을 @chain을 사용한 함수로 처리합니다."""
         # 컨텍스트 프롬프트: 이전 대화 맥락 유지
         contextualize_prompt = ChatPromptTemplate.from_messages([
-            ("system", "너는 대화 맥락을 반영해서 사용자의 현재 질문을 독립적인 형태로 재구성하는 도우미야."),
+            ("system", "너는 대화 맥락을 반영해서 사용자의 현재 질문을 독립적인 형태로 재구성하는 도우미야. 이전 대화 내용을 참고해서, 현재 질문이 더 명확해지도록 만들어줘."),
             MessagesPlaceholder("history"),
             ("human", "{input}")
         ])
