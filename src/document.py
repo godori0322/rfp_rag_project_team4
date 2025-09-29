@@ -6,6 +6,7 @@ import pandas as pd
 import pdfplumber
 import numpy as np
 from typing import List, Dict, Any
+import string
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -101,7 +102,7 @@ def chunk(filepath: str,
     2. (테이블 처리) 테이블을 Markdown으로 변환
     3. (동적 헤더 탐지) 폰트 크기 분포를 분석하여 동적으로 헤더 임계값 설정
     4. 1차 청킹: 헤더를 기준으로 의미 단위의 '챕터' 생성
-    5. 2차 청킹: RecursiveCharacterTextSplitter로 '챕터'를 최종 크기로 분할
+    5. 2차 청킹: RecursiveCharacterTextSplitter로 '챕터'를 최종 크기로 분할, 목차 제거
     """
     if noise_patterns is None:
         # 💡 일반적인 머리글/바닥글, 페이지 번호 제거 패턴 (필요시 추가/수정)
@@ -202,9 +203,26 @@ def chunk(filepath: str,
         
         sub_chunks = recursive_splitter.split_text(content)
         for sub_chunk_content in sub_chunks:
+            if is_high_special_char_ratio(sub_chunk_content):
+                continue
             final_metadata = metadata.copy()
             final_metadata['parent_header'] = header
             doc = Document(page_content=sub_chunk_content, metadata=final_metadata)
             final_documents.append(doc)
             
     return final_documents
+
+def is_high_special_char_ratio(text: str, threshold: float = 0.6) -> bool:
+    SPECIAL_CHARS = set(string.punctuation + '`~!@#$%^&*()_+-=[]{}|;:",./<>?·') # 특수문자 정의 (구두점 및 기타 기호)
+
+    total_length = len(text)
+    if total_length == 0:
+        return False
+
+    special_char_count = sum(1 for char in text if char in SPECIAL_CHARS)
+    special_char_ratio = special_char_count / total_length
+
+    if special_char_ratio > threshold:
+        print(f"---- 청크 제외됨 (특수문자 비율 {special_char_ratio:.2f}) ----")
+        print(f"제외된 청크 내용: {text}")
+    return special_char_ratio > threshold
