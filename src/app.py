@@ -59,7 +59,6 @@ with st.sidebar:
                     st.session_state.messages.append({
                         "role": "assistant",
                         "answer": msg.content,
-                        "confidence": None,
                         "inference_time": None,
                         "context_docs": None
                     })
@@ -84,13 +83,14 @@ else:
     for message in st.session_state.messages:
         role = message["role"]
         with st.chat_message(role):
-            st.markdown(message["answer"])
+            # user는 'content', assistant는 'answer' 사용
+            text = message.get("answer") or message.get("content") or ""
+            st.markdown(text)
+        
             if role == "assistant":
                 # 메타 정보 출력
                 if message.get("inference_time") is not None:
                     st.caption(f"⏱ 추론 시간: {message['inference_time']:.2f}초")
-                if message.get("confidence") is not None:
-                    st.caption(f"📊 신뢰도: {message['confidence']:.4f}")
                 if message.get("context_docs"):
                     with st.expander("🔍 참조 문서 보기"):
                         for i, doc in enumerate(message["context_docs"], start=1):
@@ -113,7 +113,6 @@ else:
         st.session_state.messages.append({
             "role": "assistant",
             "answer": response["answer"],          # 실제 텍스트
-            "confidence": response.get("confidence"),
             "inference_time": response.get("inference_time"),
             "context_docs": response.get("context_docs")
         })
@@ -121,7 +120,6 @@ else:
         with st.chat_message("assistant"):
             st.markdown(response["answer"])
             st.caption(f"⏱ 추론 시간: {response['inference_time']:.2f}초")
-            st.caption(f"📊 신뢰도: {response['confidence']:.4f}")
             if response.get("context_docs"):
                 with st.expander("🔍 참조 문서 보기"):
                     for i, doc in enumerate(response["context_docs"], start=1):

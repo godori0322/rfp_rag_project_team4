@@ -9,6 +9,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.schema.output_parser import StrOutputParser
+from langchain.schema import Document
 from langchain_core.runnables import RunnablePassthrough
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 from langchain.chains.query_constructor.base import AttributeInfo
@@ -43,7 +44,8 @@ class Chatbot:
         self.router = ChainRouter(llm=self.llm,  retriever=self.retriever, self_query_retriever=self.self_query_retriever, vectorstore=self.vectorstore, tracer=self.tracer)
         self.chain = self.router.create_router_chain()
         self.rag_handler = RAGCallbackHandler()
-
+        self.reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
+        self.cross_reranker = CrossEncoderReranker(model=self.reranker_model, top_n=Config.TOP_K)
 
     def initialize_components(self):
         """Initializes the core components like LLM, embeddings, and retriever."""
@@ -131,22 +133,6 @@ class Chatbot:
             ]
             json.dump(history_json, f, ensure_ascii=False, indent=4)
 
-    # Cross-Encoder Re-Ranker 기반 신뢰도 점수 계산
-    def compute_confidence(self, answer: str, context_docs):
-        if not context_docs:
-            return 0.0
-
-        # CrossEncoderReranker 초기화
-        reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
-        cross_reranker = CrossEncoderReranker(model=reranker_model, top_n=len(context_docs))
-
-        # 문서 압축(점수 계산용)
-        compressed_docs = cross_reranker.compress_documents(context_docs, query=answer)
-
-        # 최대 점수를 confidence로 사용
-        max_score = max(getattr(doc, "score", 0.0) for doc in compressed_docs)
-        return float(max_score)
-
     def ask(self, question: str, save_history_flag: bool = True) -> dict:
         """
         Asks the chatbot a question and returns the answer and the context used.
@@ -175,8 +161,15 @@ class Chatbot:
         end_time = time.time()
         inference_time = end_time - start_time
 
-        # 신뢰도 점수 계산
-        confidence = self.compute_confidence(result, context_docs)
+        # --- 안전한 context_docs 변환 ---
+        safe_docs = []
+        for doc in context_docs:
+            if isinstance(doc, Document):
+                safe_docs.append(doc)
+            elif isinstance(doc, str):  
+                safe_docs.append(Document(page_content=doc, metadata={}))
+            else:  
+                safe_docs.append(Document(page_content=str(doc), metadata={}))
 
         if save_history_flag:
             self.history.extend([
@@ -188,7 +181,6 @@ class Chatbot:
         # --- FIX: Return a dictionary with both answer and context ---
         return {
             "answer": result,
-            "context_docs": context_docs,
-            "inference_time": inference_time,
-            "confidence": confidence if confidence is not None else 0.0
+            "context_docs": safe_docs,
+            "inference_time": inference_time
         }
