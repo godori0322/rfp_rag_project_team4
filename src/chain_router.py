@@ -258,7 +258,7 @@ class ChainRouter:
         def get_documents(x: dict) -> List[Document]:
             question = x['input']
             print(f"--- INFO (Summarization): '{question}'에 대한 문서 검색 수행 ---")
-            docs = self.find_documents(question)
+            docs = self.get_hybrid_retrieved_documents(x) # self.find_documents(question)
             
             if not docs:
                 print("--- WARNING (Summarization): 관련된 문서를 찾지 못했습니다. ---")
@@ -490,13 +490,11 @@ class ChainRouter:
             ("human", "**추천 목록 (위 규칙에 따라 작성):**")
         ])
         
-        mmr_retriever = self.vectorstore.as_retriever(search_type="mmr")
-
         recommendation_pipeline = RunnablePassthrough.assign(
             expanded_query=query_expansion_chain # 'input'을 받아 'expanded_query' 생성
         ).assign(
             # 생성된 'expanded_query'를 사용해 MMR 검색 후 'context' 생성
-            context=lambda x: format_docs(mmr_retriever.get_relevant_documents(x["expanded_query"]))
+            context=lambda x: format_docs(self.get_hybrid_retrieved_documents(x))
         )
         
         # 최종적으로 'input', 'history', 'expanded_query', 'context'가 모두 포함된
