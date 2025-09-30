@@ -20,7 +20,7 @@ def create_vectorstore():
         return
     
     if Config.IS_LOCAL:
-        Config.to_local()
+        Config = Config.to_local()
         print(Config.EMBEDDING_MODEL, Config.LLM_MODEL, Config.VECTOR_DB_PATH)
         return
         embeddings = HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL, multi_process=True) # GPU가 2개이기 때문임

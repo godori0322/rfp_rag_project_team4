@@ -36,6 +36,7 @@ class Config:
         EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
         LLM_MODEL = "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
         VECTOR_DB_PATH = "./data/vectorstore_local"
+        return cls
 
 class LangSmithConfig:
     LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
