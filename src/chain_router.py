@@ -5,7 +5,7 @@ from langchain_core.runnables import RunnablePassthrough, RunnableLambda, Runnab
 from langchain_openai import ChatOpenAI
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from typing import List, Dict
+from typing import List, Dict, Optional
 from langchain_core.output_parsers import JsonOutputParser
 from langchain.schema.output_parser import StrOutputParser
 from langchain.chains.summarize import load_summarize_chain
@@ -33,7 +33,14 @@ class ChainRouter:
     def find_contexts(self, docs):
         return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
 
-    def get_recent_history(self, history, window_size=5):
+    def _create_conversation_summary_chain(self):
+        prompt = ChatPromptTemplate.from_messages([
+            MessagesPlaceholder("history"),
+            ("user", "지금까지의 대화 내용을 바탕으로, 우리가 현재 어떤 주제에 대해 이야기하고 있는지 한 문장으로 요약해줘.")
+        ])
+        return prompt | self.llm | StrOutputParser()
+
+    def get_recent_history(self, history, window_size=10):
         return history[-window_size:] if history else []
 
     def _create_rephrasing_chain(self):
@@ -67,13 +74,24 @@ class ChainRouter:
         print(f"--- INFO (Hybrid Retrieval): 총 {len(combined_docs)}개 문서를 검색, 중복 제거 후 {len(final_docs)}개 문서 확보 ---")
         
         return final_docs
+    
+    def _deterministic_router(self, x: dict) -> Optional[str]:
+        query = x['input'].lower()
+        if any (keyword in query for keyword in ["요약", "요약해줘", "정리해줘", "브리핑"]):
+            return "summarization"
+        if any(keyword in query for keyword in ["추천", "비슷한 사업", "유사한 사업", "추천해줘"]):
+            return "recommendation"
+        if any(keyword in query for keyword in ["비교", "차이점", "대조"]):
+            return "comparison"
+        return None
 
     def create_router_chain(self):
         # 라우터 프롬프트: 쿼리 의도 분류
+        conversation_summary_chain = self._create_conversation_summary_chain()
         rephrasing_chain = self._create_rephrasing_chain()
         route_prompt = ChatPromptTemplate.from_template(
             """당신은 사용자의 질문 의도를 정확하게 분석하여 5개의 카테고리 중 하나로 분류하는 전문가입니다.
-            **'원본 질문'을 통해 사용자의 최종 목표(요약, 비교, 추천 등)를 파악하고, '검색용 질문'은 그 목표의 대상을 파악하는 데 참고하세요.**
+            **'원본 질문'을 통해 사용자의 최종 목표(요약, 비교, 추천 등)를 파악하세요.**
             **오직 아래 5개의 카테고리 이름 중 하나만! 답변해야 합니다.** 다른 설명은 절대 추가하지 마세요.
 
             # 카테고리 목록:
@@ -89,6 +107,11 @@ class ChainRouter:
             - "비교해줘", "~랑 ~의 차이점 알려줘" -> `comparison`
             - "추천해줘", "비슷한 사업 찾아줘" -> `recommendation`
             - 그 외 특정 정보 질문 (e.g., "평가 방식은 뭐야?", "유지보수 기간 알려줘") -> `default_qa`
+
+            # --- 분석할 질문 ---
+            # 원본 질문: {input}
+            # 검색용 질문: {rephrased_question}
+            # --------------------
 
             # 분류 예시 (Few-shot Examples):
             질문: "국민연금공단 이러닝 사업의 예산이 얼마인가요?"
@@ -126,9 +149,9 @@ class ChainRouter:
             분류 결과 (카테고리 이름만 출력):"""
         )
 
-        route_chain = route_prompt | self.llm | StrOutputParser()
+        llm_route_chain = route_prompt | self.llm | StrOutputParser()
         
-    # 3단계: 각 의도에 맞는 전문화된 체인 정의
+        # 3단계: 각 의도에 맞는 전문화된 체인 정의
         metadata_search_chain = self._create_metadata_search_chain()
         summarization_chain = self._create_summarization_chain()
         comparison_chain = self._create_comparison_chain()
@@ -153,15 +176,22 @@ class ChainRouter:
             data['classification'] = classification_str
             return data
 
+        routing_branch = RunnableBranch(
+            (lambda x: x["deterministic_classification"] is not None,
+             RunnablePassthrough.assign(classification=lambda x: x["deterministic_classification"])),
+             llm_route_chain
+        )
 
         # ✅ 전체 파이프라인
         full_chain = (
             RunnablePassthrough.assign(
                 history=lambda x: self.get_recent_history(x.get("history", []))  # 답변단계에서만 쓰기 위해 유지
             )
+            .assign(conversation_summary=conversation_summary_chain)
             .assign(rephrased_question=rephrasing_chain)
+            .assign(deterministic_classification=lambda x: self._deterministic_router(x))  # 결정론적 라우팅 추가
             # retriever에는 원문 input 그대로 사용
-            .assign(classification=route_chain)
+            .assign(classification=routing_branch)
             | RunnableLambda(log_and_pass_through)
             | RunnableBranch(
                 (lambda x: "metadata_search" in x.get("classification", ""), metadata_search_chain),
