@@ -15,7 +15,8 @@ class Config:
     # 모델 설정 (시나리오 B: OpenAI 기준)
     EMBEDDING_MODEL = "text-embedding-3-small"
     # EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
-    LLM_MODEL = "gpt-4o-mini"
+    # LLM_MODEL = "gpt-4o-mini"
+    LLM_MODEL = "exaone/1.0"
     # RERANK_MODEL = 'BAAI/bge-reranker-base'
     RERANK_MODEL = 'cross-encoder/ms-marco-MiniLM-L-6-v2' #평가용 입니다.
     RFP_COLLECTION = 'rfp_documents'
