@@ -39,3 +39,17 @@ python src/evaluation.py
 pip install -r requirements.txt
 streamlit run src/app.py
 ```
+
+### PIP install version ###
+```
+# requirements.txt 파일의 각 줄을 읽어서 처리
+# 주석 (#)과 빈 줄은 건너뜀
+while IFS= read -r line; do
+  # 패키지 이름만 추출 (옵션이나 주석 제거)
+  pkg_name=$(echo "$line" | awk '{print $1}' | sed 's/#.*//')
+  if [ -n "$pkg_name" ]; then
+    echo -n "$pkg_name==$(pip show "$pkg_name" | grep "Version" | awk '{print $2}')"
+    echo
+  fi
+done < requirements.txt
+```

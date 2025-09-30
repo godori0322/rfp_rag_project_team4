@@ -2,42 +2,42 @@
 # Linux/Mac 환경으로 통일 예정이므로 참고만 해 주세요.(수정 예정)
 
 # 필수
-pdfplumber # PDF 텍스트 추출 
-pytesseract  # OCR 
-Pillow # OCR용 이미지 처리 
+pdfplumber==0.11.7 # PDF 텍스트 추출
+pytesseract==0.3.13  # OCR
+Pillow==11.3.0 # OCR용 이미지 처리
 
 # RAG 구성 
-langchain
-langchain-community
-langchain-core
-langchain-openai
-openai
-tiktoken
+langchain==0.3.27
+langchain-community==0.3.30
+langchain-core==0.3.76
+langchain-openai==0.3.33
+openai==1.107.3
+tiktoken==0.11.0
 
 # 벡터 DB 
-faiss-cpu
-chromadb
-lark
+faiss-cpu==1.12.0
+chromadb==1.1.0
+lark==1.2.2
 
 # 임베딩 & 모델 활용 
-transformers
-torch
-torchvision
-torchaudio
+transformers==4.56.1
+torch==2.8.0
+torchvision==0.23.0
+torchaudio==2.8.0
 
 # 검증
-ragas
-datasets
-langchain_openai
+ragas==0.3.5
+datasets==4.1.1
+langchain_openai==0.3.33
 
 # 유틸 
-numpy
-pandas
-scikit-learn
-dotenv
-langchain_community
-sentence-transformers
-streamlit
-lark
-networkx
-matplotlib
+numpy==2.3.3
+pandas==2.3.2
+scikit-learn==1.7.2
+dotenv==0.9.9
+langchain_community==0.3.30
+sentence-transformers==5.1.0
+streamlit==1.50.0
+lark==1.2.2
+networkx==3.5
+matplotlib==3.10.6
