@@ -91,4 +91,15 @@ else:
         # ask 메서드가 chatbot.history를 자동으로 업데이트하므로 UI용 messages 목록에만 추가
         st.session_state.messages.append({"role": "assistant", "content": response})
         with st.chat_message("assistant"):
-            st.markdown(response)
+            # 답변 본문
+            st.markdown(response["answer"])
+            
+            # 메타데이터 (작게)
+            st.caption(f"⏱ 추론 시간: {response['inference_time']:.2f}초" if response.get("inference_time") is not None else "⏱ 추론 시간: 계산되지 않음")
+            st.caption(f"📊 신뢰도: {response['confidence']:.2f}" if response.get("confidence") is not None else "📊 신뢰도: 계산되지 않음")
+
+            # 문서 context (선택적)
+            with st.expander("🔍 참조 문서 보기"):
+                for i, doc in enumerate(response["context_docs"], start=1):
+                    st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
+                    st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")

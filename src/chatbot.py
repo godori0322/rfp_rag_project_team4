@@ -1,5 +1,8 @@
 import os
 import json
+import time
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Dict
 from langsmith import Client
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -129,6 +132,17 @@ class Chatbot:
             ]
             json.dump(history_json, f, ensure_ascii=False, indent=4)
 
+    # cosine similarity 기반 신뢰도 점수 계산 함수
+    def compute_confidence(self, answer: str, context_docs, embeddings) -> float:
+        if not context_docs:
+            return 0.0
+        
+        ans_emb = embeddings.embed_query(answer)
+        ctx_embs = [embeddings.embed_query(doc.page_content) for doc in context_docs]
+
+        sims = cosine_similarity([ans_emb], ctx_embs)[0]
+        confidence = float(np.max(sims))
+
     def ask(self, question: str, save_history_flag: bool = True) -> dict:
         """
         Asks the chatbot a question and returns the answer and the context used.
@@ -136,6 +150,9 @@ class Chatbot:
         Returns:
             A dictionary containing 'answer' and 'context_docs'.
         """
+        # 추론 시간 측정
+        start_time = time.time()
+
         inputs = {"input": question, "history": self.history}
         
         # --- FIX: Use .invoke() to get the final result and capture intermediate steps ---
@@ -150,6 +167,13 @@ class Chatbot:
         context_docs = self.find_documents(question) # Re-running retrieval is a temporary fix.
                                                      # The best fix is for self.chain to return {'answer': ..., 'docs': ...}
 
+        # 추론 시간 계산
+        end_time = time.time()
+        inference_time = end_time - start_time
+
+        # 신뢰도 점수 계산
+        confidence = self.compute_confidence(result, context_docs, self.embeddings)
+
         if save_history_flag:
             self.history.extend([
                 HumanMessage(content=question),
@@ -160,5 +184,7 @@ class Chatbot:
         # --- FIX: Return a dictionary with both answer and context ---
         return {
             "answer": result,
-            "context_docs": context_docs
+            "context_docs": context_docs,
+            "inference_time": inference_time,
+            "confidence": confidence if confidence is not None else 0.0
         }
