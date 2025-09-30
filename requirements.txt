@@ -39,5 +39,5 @@ langchain_community==0.3.30
 sentence-transformers==5.1.0
 streamlit==1.50.0
 lark==1.2.2
-networkx==3.5
+networkx==3.4.2
 matplotlib==3.10.6
