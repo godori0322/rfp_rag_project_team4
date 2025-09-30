@@ -22,7 +22,9 @@ def create_vectorstore():
     if Config.IS_LOCAL:
         Config.to_local()
         print(Config.EMBEDDING_MODEL, Config.LLM_MODEL, Config.VECTOR_DB_PATH)
+        return
         embeddings = HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL, multi_process=True) # GPU가 2개이기 때문임
+        
     else:
         embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL, openai_api_key=Config.OPENAI_API_KEY)
     print(Config.EMBEDDING_MODEL, Config.LLM_MODEL, Config.VECTOR_DB_PATH)
