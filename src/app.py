@@ -88,12 +88,6 @@ else:
             if role == "assistant":
                 if message.get("inference_time") is not None:
                     st.caption(f"⏱ 추론 시간: {message['inference_time']:.2f}초")
-                context_docs = message.get("context_docs")
-                if context_docs:
-                    with st.expander("🔍 참조 문서 보기"):
-                        for i, doc in enumerate(context_docs, start=1):
-                            st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
-                            st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")
 
     # 사용자 입력 처리
     if prompt := st.chat_input("RFP 문서에 대해 질문해보세요."):
@@ -115,9 +109,3 @@ else:
         with st.chat_message("assistant", avatar=BOT_AVATAR):
             st.markdown(new_message["answer"])
             st.caption(f"⏱ 추론 시간: {new_message['inference_time']:.2f}초")
-            context_docs = new_message.get("context_docs")
-            if context_docs:
-                with st.expander("🔍 참조 문서 보기"):
-                    for i, doc in enumerate(context_docs, start=1):
-                        st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
-                        st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")
