@@ -38,6 +38,14 @@ def clean_text_with_regex(text: str, patterns: List[str]) -> str:
     """주어진 정규 표현식 패턴들을 사용하여 텍스트를 청소합니다."""
     for pattern in patterns:
         text = re.sub(pattern, "", text)
+        # Normalize whitespace: strip lines, replace multiple spaces/tabs, reduce newlines
+        # 1. Strip leading/trailing spaces from each line
+        lines = [line.strip() for line in text.split('\n')]
+        text = '\n'.join(lines)
+        # 2. Replace multiple spaces/tabs with a single space
+        text = re.sub(r'[ \t]+', ' ', text)
+        # 3. Reduce multiple newlines to a single newline
+        text = re.sub(r'\n{2,}', '\n', text)
     return text
 
 # --- Main Functions ---
@@ -108,8 +116,9 @@ def chunk(filepath: str,
     """
     if noise_patterns is None:
         noise_patterns = [
-            r"^\s*-\s*\d+\s*-\s*$",      # "- 1 -", "- 2 -"
-            r"^\s*\d+\s*$",              # 페이지 번호만 있는 경우
+            r"^\s*-\s*\d+\s*-\s*$",      # "- 1 -", "- 2 -" (line only)
+            r"-\s*\d+\s*-",                # "- 18 -" anywhere in line
+            r"^\s*\d+\s*$",                # 페이지 번호만 있는 경우
             r"(?i)page\s*\d+\s*of\s*\d+" # "Page 1 of 10"
         ]
 
@@ -151,7 +160,9 @@ def chunk(filepath: str,
                         line_text = " ".join(words_in_line)
                         filtered_lines.append(line_text)
 
-                cleaned_text = clean_text_with_regex("\n".join(filtered_lines), noise_patterns)
+                # Apply noise cleansing to each line individually
+                cleaned_lines = [clean_text_with_regex(line, noise_patterns) for line in filtered_lines]
+                cleaned_text = "\n".join([line for line in cleaned_lines if line.strip()])
                 if cleaned_text.strip():
                     page_items.append({
                         'type': 'text',
@@ -199,10 +210,13 @@ def chunk(filepath: str,
                         })
 
     # --- 4. 동적 헤더 임계값 계산 ---
-    try:
-        header_font_threshold = np.percentile(all_font_sizes, header_percentile)
-    except IndexError:
+    if not all_font_sizes:
         header_font_threshold = 18
+    else:
+        header_font_threshold = np.percentile(all_font_sizes, header_percentile)
+        # 헤더와 본문이 동일한 경우 대비
+        if header_font_threshold == max(all_font_sizes):
+            header_font_threshold = max(all_font_sizes) - 1
 
     # --- 5. 1차 청킹 (헤더 기준) ---
     page_items.sort(key=lambda x: (x['page'], x['top']))
@@ -244,17 +258,42 @@ def chunk(filepath: str,
 
     final_documents = []
     for chapter in font_size_chunks:
-        header = chapter['header']
         content = chapter['content']
-
         sub_chunks = recursive_splitter.split_text(content)
         for sub_chunk_content in sub_chunks:
+            # Use the first valid line as the header for this chunk
+            def is_valid_header(line):
+                # Skip lines that are too short or mostly special chars or in blacklist
+                blacklist = {'□', '※', '•', '-', '*', '·'}
+                line_stripped = line.strip()
+                if len(line_stripped) < 2:
+                    return False
+                if line_stripped in blacklist:
+                    return False
+                # If more than 60% of chars are special, skip
+                special_chars = set('`~!@#$%^&*()_+-=[]{}|;:\",./<>?·')
+                total = len(line_stripped)
+                if total == 0:
+                    return False
+                special_count = sum(1 for c in line_stripped if c in special_chars)
+                if (special_count / total) > 0.6:
+                    return False
+                return True
+
+            lines = [line.strip() for line in sub_chunk_content.split('\n') if line.strip()]
+            valid_lines = [line for line in lines if is_valid_header(line)]
+            if valid_lines:
+                chunk_header = valid_lines[0]
+            elif lines:
+                chunk_header = lines[0]
+            else:
+                chunk_header = chapter['header']
             # --- 테이블 청크 또는 테이블 포함 청크는 예외 처리 ---
-            if "table" not in header.lower() and "|" not in sub_chunk_content:
+            if "table" not in chunk_header.lower() and "|" not in sub_chunk_content:
                 if is_high_special_char_ratio(sub_chunk_content):
                     continue
             final_metadata = metadata.copy()
-            final_metadata['parent_header'] = header
+            final_metadata['parent_header'] = chunk_header
             doc = Document(page_content=sub_chunk_content, metadata=final_metadata)
             final_documents.append(doc)
 
