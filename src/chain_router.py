@@ -73,7 +73,7 @@ class ChainRouter:
         rephrasing_chain = self._create_rephrasing_chain()
         route_prompt = ChatPromptTemplate.from_template(
             """사용자의 질문을 분석하여, 질문의 의도를 다음 5가지 카테고리 중 하나로 분류하세요.
-            `metadata_search`: 특정 조건(기관, 사업명 등)으로 문서를 찾아달라는 요청.
+            `metadata_search`: 특정 조건(공고 번호, 공고 차수, 사업명, 사업 금액, 발주 기관, 공개 일자, 입찰 참여 시작일, 입찰 참여 마감일)으로 문서를 찾아달라는 요청.
             `summarization`: 문서의 핵심 내용을 요약해달라는 요청.
             `comparison`: 다중 문서 비교나, 단일 문서내의 내용을 비교해달라는 요청.
             `recommendation`: 특정 사업과 유사한 다른 사업을 추천해달라는 요청.

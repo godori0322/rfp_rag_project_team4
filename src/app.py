@@ -91,10 +91,13 @@ else:
                 # 메타 정보 출력
                 if message.get("inference_time") is not None:
                     st.caption(f"⏱ 추론 시간: {message['inference_time']:.2f}초")
-                if message.get("context_docs"):
+                
+                # 🔹 수정/복원 부분: 이전에 삭제되었던 참조 문서(expander) 출력
+                context_docs = message.get("context_docs")  # 안전하게 변수에 저장
+                if context_docs:  
                     with st.expander("🔍 참조 문서 보기"):
-                        for i, doc in enumerate(message["context_docs"], start=1):
-                            st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
+                        for i, doc in enumerate(context_docs, start=1):
+                            st.markdown(f"**[{i}]** {doc.page_content[:300]}...")  # 내용 일부만 표시
                             st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")
 
     # 사용자 입력 처리
@@ -114,14 +117,17 @@ else:
             "role": "assistant",
             "answer": response["answer"],          # 실제 텍스트
             "inference_time": response.get("inference_time"),
-            "context_docs": response.get("context_docs")
+            "context_docs": response.get("context_docs")  # 🔹 수정/복원
         })
-        # assistant 메시지 UI에 표시
+
+        # 🔹 수정/복원 부분: assistant 메시지 UI에 참조 문서 표시
         with st.chat_message("assistant"):
             st.markdown(response["answer"])
             st.caption(f"⏱ 추론 시간: {response['inference_time']:.2f}초")
-            if response.get("context_docs"):
+            
+            context_docs = response.get("context_docs")
+            if context_docs:  # 안전하게 존재 여부 확인
                 with st.expander("🔍 참조 문서 보기"):
-                    for i, doc in enumerate(response["context_docs"], start=1):
-                        st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
+                    for i, doc in enumerate(context_docs, start=1):
+                        st.markdown(f"**[{i}]** {doc.page_content[:300]}...")  # 내용 일부 표시
                         st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")
