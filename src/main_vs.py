@@ -19,17 +19,20 @@ def create_vectorstore():
         print("OPENAI_API_KEY가 올바르게 설정되지 않았습니다. .env 파일을 확인해주세요.")
         return
     
-    print("문서 로딩을 시작합니다...")
-    doc_group = load_documents()
-    print(f"총 {len(doc_group)}개의 문서 그룹을 로드했습니다.")
-
     if Config.IS_LOCAL:
         Config.to_local()
         embeddings = HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL, multi_process=True) # GPU가 2개이기 때문임
     else:
         embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL, openai_api_key=Config.OPENAI_API_KEY)
     print(Config.EMBEDDING_MODEL, Config.LLM_MODEL, Config.VECTOR_DB_PATH)
+
     return
+    
+    print("문서 로딩을 시작합니다...")
+    doc_group = load_documents()
+    print(f"총 {len(doc_group)}개의 문서 그룹을 로드했습니다.")
+
+
     vector_store = Chroma(
         persist_directory=Config.VECTOR_DB_PATH, 
         embedding_function=embeddings, 
