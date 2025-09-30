@@ -21,13 +21,14 @@ def create_vectorstore():
     
     if Config.IS_LOCAL:
         Config.to_local()
+        print(Config.EMBEDDING_MODEL, Config.LLM_MODEL, Config.VECTOR_DB_PATH)
         embeddings = HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL, multi_process=True) # GPU가 2개이기 때문임
     else:
         embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL, openai_api_key=Config.OPENAI_API_KEY)
     print(Config.EMBEDDING_MODEL, Config.LLM_MODEL, Config.VECTOR_DB_PATH)
 
     return
-    
+
     print("문서 로딩을 시작합니다...")
     doc_group = load_documents()
     print(f"총 {len(doc_group)}개의 문서 그룹을 로드했습니다.")
