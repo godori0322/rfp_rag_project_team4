@@ -10,7 +10,7 @@ from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain.chat_models import ChatLocalLLM
+from langchain_community.chat_models import ChatLocalLLM
 from langchain.callbacks.tracers import LangChainTracer
 from chain_router_local import ChainRouter  # 앞서 만든 로컬 LLM용 chain_router
 
@@ -54,7 +54,10 @@ class Chatbot:
         )
 
         # 변경: 로컬 LLM 사용
-        self.llm = ChatLocalLLM(model_path=Config.LOCAL_LLM_MODEL_PATH, temperature=Config.TEMPERATURE)
+        self.llm = ChatLocalLLM(
+            model_path=Config.LLM_MODEL,  # EXAONE 모델 경로
+            temperature=Config.TEMPERATURE,
+        )
 
         self.retriever = self.create_default_retriever()
         self.self_query_retriever = self.create_self_query_retriever()
