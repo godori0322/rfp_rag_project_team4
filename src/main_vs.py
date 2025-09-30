@@ -42,7 +42,7 @@ def create_vectorstore():
 
     print("\n벡터 DB에 문서 추가를 시작합니다...")
     cnt = 1
-    batch_size = 100   # ✅ 안전한 배치 크기 (조정 가능)
+    batch_size = 100   # 배치 크기 
 
     for doc_chunks in doc_group:  # doc_group: List[List[Document]]
         for chunk in doc_chunks:
