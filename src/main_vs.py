@@ -6,6 +6,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter, TextSplitter
 from langchain.schema import Document
 from document import load_documents
 from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from typing import List
 
@@ -22,8 +23,13 @@ def create_vectorstore():
     doc_group = load_documents()
     print(f"총 {len(doc_group)}개의 문서 그룹을 로드했습니다.")
 
-    embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL, openai_api_key=Config.OPENAI_API_KEY)
-    
+    if Config.IS_LOCAL:
+        Config.to_local()
+        embeddings = HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL, multi_process=True) # GPU가 2개이기 때문임
+    else:
+        embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL, openai_api_key=Config.OPENAI_API_KEY)
+    print(Config.EMBEDDING_MODEL, Config.LLM_MODEL, Config.VECTOR_DB_PATH)
+    return
     vector_store = Chroma(
         persist_directory=Config.VECTOR_DB_PATH, 
         embedding_function=embeddings, 

@@ -20,6 +20,7 @@ class Config:
     RERANK_MODEL = 'cross-encoder/ms-marco-MiniLM-L-6-v2' #평가용 입니다.
     RFP_COLLECTION = 'rfp_documents'
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    IS_LOCAL = True
 
     # RAG 파라미터
     CHUNK_SIZE = 1000
@@ -29,6 +30,12 @@ class Config:
     FETCH_K = 20
     LAMBDA_MULT = 0.5
     TEMPERATURE = 0.2
+
+    @classmethod
+    def to_local(cls):
+        EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
+        LLM_MODEL = "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
+        VECTOR_DB_PATH = "./data/vectorstore_local"
 
 class LangSmithConfig:
     LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
