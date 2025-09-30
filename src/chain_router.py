@@ -264,9 +264,6 @@ class ChainRouter:
 
 
 
-
-
-
     def _create_summarization_chain(self):
         """## 정보 요약 체인 (Route 3)"""
         
@@ -325,10 +322,9 @@ class ChainRouter:
             "--- 끝 ---\n\n"
             "최종 사업 요약 브리핑:")
         ])
-        ## 수정된 부분 ##
-        # 'history'가 유실되는 문제를 해결하기 위해 데이터 흐름을 재구성했습니다.
+        
         # RunnablePassthrough.assign을 사용하여 파이프라인 전반에 걸쳐 'input', 'history' 등의
-        # 원본 데이터를 유지하면서 새로운 키('docs', 'summaries', 'context')를 추가하는 방식을 사용합니다.
+        # 원본 데이터를 유지하면서 새로운 키('docs', 'summaries', 'context')를 추가하는 방식
         
         # 1. 문서 검색 결과를 'docs' 키에 할당 (원본 데이터 유지)
         summarization_pipeline = RunnablePassthrough.assign(docs=get_documents)
@@ -350,11 +346,7 @@ class ChainRouter:
             context=combine_summaries
         )
 
-        # 4. 최종적으로 모든 키가 포함된 딕셔너리를 reduce_prompt에 전달
         return summarization_pipeline | reduce_prompt | self.llm | StrOutputParser()
-
-
-
 
     
     def _create_comparison_chain(self):
@@ -455,13 +447,9 @@ class ChainRouter:
         return (
             RunnablePassthrough.assign(
                 triage_result=triage_chain, 
-                history=lambda x: x.get("history", []) # history를 명시적으로 전달
+                history=lambda x: x.get("history", []) 
             ) | branch
         )
-
-
-
-
 
 
     def _create_recommendation_chain(self):
@@ -520,6 +508,5 @@ class ChainRouter:
             context=lambda x: format_docs(self.get_hybrid_retrieved_documents(x))
         )
         
-        # 최종적으로 'input', 'history', 'expanded_query', 'context'가 모두 포함된
-        # 딕셔너리가 recommendation_prompt로 전달됩니다.
+        # 최종적으로 'input', 'history', 'expanded_query', 'context'가 모두 포함된 딕셔너리가 recommendation_prompt로 전달.
         return recommendation_pipeline | recommendation_prompt | self.llm | StrOutputParser()

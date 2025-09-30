@@ -26,7 +26,7 @@ def browse_vector_db(limit: int = 10):
         collection = client.get_collection(name=collection_name)
         
         # collection.get() 메서드를 사용하여 데이터를 조회
-        # documents, metadatas, ids 등을 모두 가져올 수 있다.
+        # documents, metadatas, ids 등을 모두 가져올 수 있음.
         data = collection.get(
             limit=limit,
             include=["metadatas", "documents"]
@@ -55,5 +55,5 @@ def browse_vector_db(limit: int = 10):
         print(f"\n[오류] 데이터베이스 조회 중 오류가 발생했습니다: {e}")
 
 if __name__ == "__main__":
-    # 여기서 숫자를 바꾸면 조회하는 데이터 개수를 조절할 수 있습니다.
+    # 여기서 숫자를 바꾸면 조회하는 데이터 개수를 조절할 수 있음.
     browse_vector_db(limit=50)

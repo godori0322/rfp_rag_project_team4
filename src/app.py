@@ -51,7 +51,6 @@ with st.sidebar:
                         "inference_time": None, "context_docs": None
                     })
             st.success(f"'{st.session_state.user_id}'님, 안녕하세요! 이전 대화 기록을 불러왔습니다.")
-            st.rerun()
         else:
             st.error("사용자 ID를 입력해야 합니다.")
     st.divider()
@@ -60,7 +59,7 @@ with st.sidebar:
 # --- 메인 화면: 채팅 인터페이스 ---
 st.title("📑 RFP 문서 분석 및 질의응답")
 
-# --- ✨ 수정: 아이콘 경로 설정 ---
+# --- 아이콘 경로 설정 ---
 USER_AVATAR = "👤"
 BOT_AVATAR = "data/image/rogo.png"
 
@@ -69,7 +68,7 @@ if not st.session_state.chatbot:
 else:
     st.success(f"현재 세션: **{st.session_state.user_id}**")
     
-    # --- ✨ 수정: 초기 환영 메시지 및 예시 질문 추가 ---
+    # --- 초기 환영 메시지 및 예시 질문 추가 ---
     if not st.session_state.messages:
         with st.chat_message("assistant", avatar=BOT_AVATAR):
             st.markdown("안녕하세요! 입찰메이트 AI 컨설턴트 비디(BIDI)입니다. 🤝")
@@ -122,4 +121,3 @@ else:
                     for i, doc in enumerate(context_docs, start=1):
                         st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
                         st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")
-

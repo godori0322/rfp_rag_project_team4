@@ -12,7 +12,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from config import Config
 
-# --- Helper Functions ---
 
 def convert_table_to_markdown(table: List[List[str]]) -> str:
     """PDFplumber로 추출된 테이블(list of lists)을 Markdown 형식으로 변환합니다."""
@@ -48,10 +47,9 @@ def clean_text_with_regex(text: str, patterns: List[str]) -> str:
         text = re.sub(r'\n{2,}', '\n', text)
     return text
 
-# --- Main Functions ---
 
 def load_documents():
-    """CSV 메타데이터와 PDF 문서를 로드하고 청킹하여 Document 객체 리스트를 반환합니다."""
+    """CSV 메타데이터와 PDF 문서를 로드하고 청킹하여 Document 객체 리스트를 반환."""
     def ext(original_filename, ext='pdf'):
         base_filename, _ = os.path.splitext(original_filename)
         return f"{base_filename}.{ext}"
@@ -82,7 +80,6 @@ def load_documents():
         filepath = os.path.join(Config.PDF_PATH, ext(row['파일명']))
         
         # 💡 개선된 chunk 함수 호출
-        # 여러 파라미터를 실험해볼 수 있습니다.
         docs = chunk(
             filepath=filepath, 
             metadata=metadata,
@@ -261,16 +258,13 @@ def chunk(filepath: str,
         content = chapter['content']
         sub_chunks = recursive_splitter.split_text(content)
         for sub_chunk_content in sub_chunks:
-            # Use the first valid line as the header for this chunk
             def is_valid_header(line):
-                # Skip lines that are too short or mostly special chars or in blacklist
                 blacklist = {'□', '※', '•', '-', '*', '·'}
                 line_stripped = line.strip()
                 if len(line_stripped) < 2:
                     return False
                 if line_stripped in blacklist:
                     return False
-                # If more than 60% of chars are special, skip
                 special_chars = set('`~!@#$%^&*()_+-=[]{}|;:\",./<>?·')
                 total = len(line_stripped)
                 if total == 0:
