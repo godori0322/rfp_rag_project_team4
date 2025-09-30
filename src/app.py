@@ -51,9 +51,18 @@ with st.sidebar:
             st.session_state.messages = []
             for msg in st.session_state.chatbot.history:
                 if isinstance(msg, HumanMessage):
-                    st.session_state.messages.append({"role": "user", "content": msg.content})
+                    st.session_state.messages.append({
+                        "role": "user",
+                        "answer": msg.content
+                    })
                 elif isinstance(msg, AIMessage):
-                    st.session_state.messages.append({"role": "assistant", "content": msg.content})
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "answer": msg.content,
+                        "confidence": None,
+                        "inference_time": None,
+                        "context_docs": None
+                    })
             
             st.success(f"'{st.session_state.user_id}'님, 안녕하세요! 이전 대화 기록을 불러왔습니다.")
             st.rerun() 
@@ -73,8 +82,20 @@ else:
 
     # 이전 대화 기록 출력
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        role = message["role"]
+        with st.chat_message(role):
+            st.markdown(message["answer"])
+            if role == "assistant":
+                # 메타 정보 출력
+                if message.get("inference_time") is not None:
+                    st.caption(f"⏱ 추론 시간: {message['inference_time']:.2f}초")
+                if message.get("confidence") is not None:
+                    st.caption(f"📊 신뢰도: {message['confidence']:.4f}")
+                if message.get("context_docs"):
+                    with st.expander("🔍 참조 문서 보기"):
+                        for i, doc in enumerate(message["context_docs"], start=1):
+                            st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
+                            st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")
 
     # 사용자 입력 처리
     if prompt := st.chat_input("RFP 문서에 대해 질문해보세요."):
@@ -89,17 +110,20 @@ else:
 
         # AI의 답변을 UI에 표시
         # ask 메서드가 chatbot.history를 자동으로 업데이트하므로 UI용 messages 목록에만 추가
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.session_state.messages.append({
+            "role": "assistant",
+            "answer": response["answer"],          # 실제 텍스트
+            "confidence": response.get("confidence"),
+            "inference_time": response.get("inference_time"),
+            "context_docs": response.get("context_docs")
+        })
+        # assistant 메시지 UI에 표시
         with st.chat_message("assistant"):
-            # 답변 본문
             st.markdown(response["answer"])
-            
-            # 메타데이터 (작게)
-            st.caption(f"⏱ 추론 시간: {response['inference_time']:.2f}초" if response.get("inference_time") is not None else "⏱ 추론 시간: 계산되지 않음")
-            st.caption(f"📊 신뢰도: {response['confidence']:.2f}" if response.get("confidence") is not None else "📊 신뢰도: 계산되지 않음")
-
-            # 문서 context (선택적)
-            with st.expander("🔍 참조 문서 보기"):
-                for i, doc in enumerate(response["context_docs"], start=1):
-                    st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
-                    st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")
+            st.caption(f"⏱ 추론 시간: {response['inference_time']:.2f}초")
+            st.caption(f"📊 신뢰도: {response['confidence']:.4f}")
+            if response.get("context_docs"):
+                with st.expander("🔍 참조 문서 보기"):
+                    for i, doc in enumerate(response["context_docs"], start=1):
+                        st.markdown(f"**[{i}]** {doc.page_content[:300]}...")
+                        st.caption(f"출처: {doc.metadata.get('filename', 'N/A')}")

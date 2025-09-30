@@ -2,7 +2,6 @@ import os
 import json
 import time
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Dict
 from langsmith import Client
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -132,16 +131,21 @@ class Chatbot:
             ]
             json.dump(history_json, f, ensure_ascii=False, indent=4)
 
-    # cosine similarity 기반 신뢰도 점수 계산 함수
-    def compute_confidence(self, answer: str, context_docs, embeddings) -> float:
+    # Cross-Encoder Re-Ranker 기반 신뢰도 점수 계산
+    def compute_confidence(self, answer: str, context_docs):
         if not context_docs:
             return 0.0
-        
-        ans_emb = embeddings.embed_query(answer)
-        ctx_embs = [embeddings.embed_query(doc.page_content) for doc in context_docs]
 
-        sims = cosine_similarity([ans_emb], ctx_embs)[0]
-        confidence = float(np.max(sims))
+        # CrossEncoderReranker 초기화
+        reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
+        cross_reranker = CrossEncoderReranker(model=reranker_model, top_n=len(context_docs))
+
+        # 문서 압축(점수 계산용)
+        compressed_docs = cross_reranker.compress_documents(context_docs, query=answer)
+
+        # 최대 점수를 confidence로 사용
+        max_score = max(getattr(doc, "score", 0.0) for doc in compressed_docs)
+        return float(max_score)
 
     def ask(self, question: str, save_history_flag: bool = True) -> dict:
         """
@@ -172,7 +176,7 @@ class Chatbot:
         inference_time = end_time - start_time
 
         # 신뢰도 점수 계산
-        confidence = self.compute_confidence(result, context_docs, self.embeddings)
+        confidence = self.compute_confidence(result, context_docs)
 
         if save_history_flag:
             self.history.extend([
