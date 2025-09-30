@@ -18,7 +18,7 @@ def ext(original_filename, ext='pdf'):
     return f"{base_filename}.{ext}"
 def get_total_pages(pdf_path: str) -> int:
     """
-    ## 변경된 로직: pdfplumber를 사용해 PDF 파일의 총 페이지수를 반환합니다.
+    ## 변경된 로직: pdfplumber를 사용해 PDF 파일의 총 페이지수를 반환.
     """
     try:
         with pdfplumber.open(pdf_path) as pdf:
