@@ -30,7 +30,6 @@ def create_vectorstore():
     doc_group = load_documents()
     print(f"총 {len(doc_group)}개의 문서 그룹을 로드했습니다.")
 
-
     vector_store = Chroma(
         persist_directory=Config.VECTOR_DB_PATH, 
         embedding_function=embeddings, 
@@ -45,7 +44,6 @@ def create_vectorstore():
         embedding_function=embeddings, 
         collection_name=Config.RFP_COLLECTION
     )
-
 
     print("\n벡터 DB에 문서 추가를 시작합니다...")
     cnt = 1
