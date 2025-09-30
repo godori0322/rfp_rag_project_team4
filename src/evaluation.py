@@ -14,7 +14,7 @@ from ragas.metrics import (
 )
 from langchain_openai import ChatOpenAI
 from ragas.embeddings import OpenAIEmbeddings
-from openai import AsyncOpenAI # 수정: AsyncOpenAI 임포트
+from openai import AsyncOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 
 from config import Config
@@ -27,10 +27,10 @@ load_dotenv(find_dotenv())
 ragas_llm_base = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 ragas_llm = LangchainLLMWrapper(langchain_llm=ragas_llm_base)
 
-# 수정: 비동기 openai 클라이언트를 인스턴스화
+# 비동기 openai 클라이언트를 인스턴스화
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 수정: ragas.embeddings.OpenAIEmbeddings에 비동기 client 인자를 전달
+# ragas.embeddings.OpenAIEmbeddings에 비동기 client 인자를 전달
 ragas_embeddings = OpenAIEmbeddings(client=openai_client, model="text-embedding-3-small")
 
 # RAGAS 메트릭 초기화
