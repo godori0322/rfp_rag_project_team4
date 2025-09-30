@@ -145,42 +145,39 @@ class Chatbot:
 
         inputs = {"input": question, "history": self.history}
         
-        # --- FIX: Use .invoke() to get the final result and capture intermediate steps ---
-        # We need to configure the chain to pass through the 'docs'
-        # This assumes your chain is structured to have a 'docs' key after retrieval.
-        # If you've used my previous refactoring of chain_router.py, this will work.
+        # invoke 결과 가져오기
         result = self.chain.invoke(inputs)
 
-        # The final output of the chain is the answer string.
-        # The 'docs' were an intermediate step that we need to retrieve again for evaluation.
-        # A more robust way is to have the chain return a dict, but this works for now.
-        context_docs = self.find_documents(question) # Re-running retrieval is a temporary fix.
-                                                     # The best fix is for self.chain to return {'answer': ..., 'docs': ...}
+        # --- 🔹 result가 str인지 dict인지 확인 ---
+        if isinstance(result, dict):
+            answer = result.get('answer', '')
+            context_docs = result.get('docs', [])
+        else:
+            answer = str(result)  # str이면 그대로 answer
+            # context_docs를 재호출하지 않고 안전하게 빈 리스트
+            context_docs = self.find_documents(question)
 
-        # 추론 시간 계산
-        end_time = time.time()
-        inference_time = end_time - start_time
-
-        # --- 안전한 context_docs 변환 ---
+        # 안전하게 Document 변환
         safe_docs = []
         for doc in context_docs:
             if isinstance(doc, Document):
                 safe_docs.append(doc)
-            elif isinstance(doc, str):  
+            elif isinstance(doc, str):
                 safe_docs.append(Document(page_content=doc, metadata={}))
-            else:  
+            else:
                 safe_docs.append(Document(page_content=str(doc), metadata={}))
 
+        # History 업데이트
         if save_history_flag:
             self.history.extend([
                 HumanMessage(content=question),
-                AIMessage(content=result),
+                AIMessage(content=answer),
             ])
             self.save_history()
-            
-        # --- FIX: Return a dictionary with both answer and context ---
+
+        inference_time = time.time() - start_time
         return {
-            "answer": result,
+            "answer": answer,
             "context_docs": safe_docs,
             "inference_time": inference_time
         }
