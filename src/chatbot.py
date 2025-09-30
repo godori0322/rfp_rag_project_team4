@@ -4,6 +4,7 @@ from typing import List, Dict
 from langsmith import Client
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.schema.output_parser import StrOutputParser
@@ -21,7 +22,7 @@ from langchain.callbacks.tracers import LangChainTracer
 from config import Config, LangSmithConfig
 from rag_graph import RAGCallbackHandler
 from chain_router import ChainRouter
-
+from local_llm import load_llm
 
 class Chatbot:
     def __init__(self, user_id: str):
@@ -32,6 +33,8 @@ class Chatbot:
 
         # Validate LangSmith configuration
         LangSmithConfig.validate_config()
+        if Config.IS_LOCAL:
+            Config.to_local()
         
         # Initialize LangSmith client with explicit API key
         self.langsmith_client = Client(api_key=LangSmithConfig.LANGCHAIN_API_KEY, api_url=LangSmithConfig.LANGCHAIN_ENDPOINT)        
@@ -45,13 +48,19 @@ class Chatbot:
 
     def initialize_components(self):
         """Initializes the core components like LLM, embeddings, and retriever."""
-        self.embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL)
+        if Config.IS_LOCAL:
+            self.embeddings = HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL, multi_process=True) # GPU가 2개이기 때문임
+        else:
+            self.embeddings = OpenAIEmbeddings(model=Config.EMBEDDING_MODEL)
         self.vectorstore = Chroma(
             persist_directory=Config.VECTOR_DB_PATH,
             embedding_function=self.embeddings,
             collection_name=Config.RFP_COLLECTION
         )
-        self.llm = ChatOpenAI(model=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
+        if Config.IS_LOCAL:
+            self.llm = load_llm(Config.LLM_MODEL)
+        else:
+            self.llm = ChatOpenAI(model=Config.LLM_MODEL, temperature=Config.TEMPERATURE)
         self.retriever = self.create_default_retriever()
         self.self_query_retriever = self.create_self_query_retriever()
 
