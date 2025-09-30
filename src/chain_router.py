@@ -55,8 +55,11 @@ class ChainRouter:
         print(f"--- INFO (Hybrid Retrieval): 재구성된 질문 '{rephrased_question}'으로 검색 ---")
         docs_rephrased = self.find_documents(rephrased_question)
 
+        print(f"--- INFO (Hybrid Retrieval + Self query retriver): 재구성된 질문 '{rephrased_question}'으로 검색 ---")
+        self_query_docs_rephrased = self.find_self_query_documents(rephrased_question)
+
         # 두 문서 리스트를 합칩니다.
-        combined_docs = docs_raw + docs_rephrased
+        combined_docs = docs_raw + docs_rephrased + self_query_docs_rephrased
 
         # 중복된 문서를 제거합니다. page_content를 기준으로 고유성을 확인합니다.
         unique_docs = {}
