@@ -9,7 +9,14 @@
 RFP 문서 기반 RAG 시스템의 전체 동작 과정을 시각적으로 표현한 다이어그램입니다.  
 사용자 입력 → 체인 라우팅 → 문서 검색(Retriever) → LLM 응답 생성 → 최종 답변 반환의 흐름을 한눈에 확인할 수 있습니다.
 
-<img src="chain_router.png" alt="RAG Flow Diagram" />
+<img src="data/image/chain_router.png" alt="RAG Flow Diagram" />
+
+## 🔄 하이브리드 리트리버 기반 RAG 다이어그램
+
+하이브리드 리트리버(Hybrid Retriever)는 **Original Search**와 **Rephrasing Search**를 결합하여 더 정교한 검색 결과를 제공합니다.
+두 검색 결과를 앙상블하여 최종 후보 문맥을 생성하고, 이를 LLM에 전달하여 답변을 생성합니다.
+
+<p align="center"><img src="data/image/hybrid_retriever.webp" alt="Hybrid Retriever Diagram" /></p>
 
 ## 🚀 주요 기술 스택
 
@@ -129,8 +136,8 @@ python src/evaluation.py
 - **프로젝트 노션 페이지**
   👉 [Notion 링크](https://www.notion.so/RFP-RAG-26a7f7b0bee7808e86c9f1b3f9211aa1)
 
-- **최종 보고서 (PDF)**
-  👉 [`docs/final_report.pdf`](docs/final_report.pdf) --> 완료 후 수정 필요
+- **최종 보고서**
+  👉 [Notion 링크](https://www.notion.so/GPT-27e7f7b0bee780d7b8a2c6a63b24b889)
 
 - **발표 자료 (PPT)**
   👉 [발표 자료 다운로드](https://your-ppt-link) --> 완료 후 수정 필요
