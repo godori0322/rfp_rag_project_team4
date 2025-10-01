@@ -23,7 +23,7 @@ if "messages" not in st.session_state:
 
 # --- 사이드바 ---
 with st.sidebar:
-    st.image("data/image/rogo.png", width=250)
+    st.image("data/image/LOGO.png", width=250)
     st.header("입찰메이트 🤝")
     st.markdown("RFP 문서 기반 질의응답 시스템")
     st.divider()
