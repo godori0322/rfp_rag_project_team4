@@ -124,6 +124,13 @@ streamlit run src/app.py
 python src/evaluation.py
 ```
 
+## 📱 앱 실행 화면 (입찰메이트 브라우저)
+
+아래는 입찰메이트 브라우저에서 실행 가능한 앱의 실제 스크린샷입니다.
+
+<p align="center"><img src="data/image/app_screenshot.png" alt="입찰메이트 브라우저 앱 실행 화면"/></p>
+
+
 ## 📓 협업 & 문서 자료
 
 ### 👥 협업일지
