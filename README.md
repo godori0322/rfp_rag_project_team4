@@ -10,6 +10,12 @@
 
 <p align="center"><img src="data/image/app_screenshot.png" alt="입찰메이트 브라우저 앱 실행 화면"/></p>
 
+## 🎥 데모 영상
+
+<video src="data/app_screenrecording.mp4" width="700" controls>
+  브라우저가 video 태그를 지원하지 않습니다.
+</video>
+
 ## 🔄 프로젝트 RAG 흐름 다이어그램
 
 RFP 문서 기반 RAG 시스템의 전체 동작 과정을 시각적으로 표현한 다이어그램입니다.  
