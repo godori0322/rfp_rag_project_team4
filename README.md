@@ -95,7 +95,7 @@ python src/main_vs.py
 
 ### 2. 챗봇 터미널 실행
 ```bash
-python src/mains.py
+python src/main.py
 ```
 
 ### 3. 스트림릿 실행방법
