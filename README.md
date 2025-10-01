@@ -10,6 +10,7 @@ RFP 문서 기반 RAG 시스템의 전체 동작 과정을 시각적으로 표�
 사용자 입력 → 체인 라우팅 → 문서 검색(Retriever) → LLM 응답 생성 → 최종 답변 반환의 흐름을 한눈에 확인할 수 있습니다.
 
 👉 [RAG Flow Diagram 보기](chain_router.png)
+<img src="chain_router.png" alt="RAG Flow Diagram" width="600"/>
 
 ## 🚀 주요 기술 스택
 
