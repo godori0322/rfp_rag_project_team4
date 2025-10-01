@@ -115,7 +115,7 @@ python src/evaluation.py
 ### 👥 협업일지
 - **고인범** 👉 [협업일지 링크](https://www.notion.so/_-27fbc32ff871805cb7f4fd45e413ca14)
 - **이종서** 👉 [협업일지 링크](https://www.notion.so/26b64dd7ce72805db00df861d1ad7af2)
-- **공지연** 👉 [협업일지 링크](https://your-link-for-gong-jiyeon) --> 완료 후 수정 필요
+- **공지연** 👉 [협업일지 링크](https://chlorinated-knife-ad5.notion.site/26b90068d16d80fc95f1c3774e974ea7)
 - **유준영** 👉 [협업일지 링크](https://www.notion.so/26bd8eb5efbb80eb8860cea6e0dac93f)
 
 ### 📑 프로젝트 문서
