@@ -6,7 +6,7 @@
 
 ## 🚀 주요 기술 스택
 
-*   **Python 3.9+**
+*   **Python 3.10+**
 *   **Langchain:** RAG 파이프라인 구축
 *   **Streamlit:** 웹 기반 사용자 인터페이스 (Web UI) 구현
 *   **OpenAI API:** LLM(Large Language Model) 연동
@@ -16,6 +16,8 @@
 
 *   `data/`: 원본 PDF 문서 및 전처리된 데이터 저장
     *   `data/pdf/`: 원본 PDF 파일 보관
+    *   `data/image/`: 팀 로고 파일 보관
+    *   `data/raw/`: 원본 CSV 파일 보관
 *   `src/`: 핵심 소스 코드
     *   `src/app.py`: Streamlit 애플리케이션
     *   `src/chain_router.py`: Langchain 체인 라우팅 로직
@@ -107,3 +109,21 @@ streamlit run src/app.py
 ```bash
 python src/evaluation.py
 ```
+
+## 📓 협업 & 문서 자료
+
+### 👥 협업일지
+- **고인범** 👉 [협업일지 링크](https://www.notion.so/_-27fbc32ff871805cb7f4fd45e413ca14)
+- **이종서** 👉 [협업일지 링크](https://www.notion.so/26b64dd7ce72805db00df861d1ad7af2)
+- **공지연** 👉 [협업일지 링크](https://your-link-for-gong-jiyeon) --> 완료 후 수정 필요
+- **유준영** 👉 [협업일지 링크](https://www.notion.so/26bd8eb5efbb80eb8860cea6e0dac93f)
+
+### 📑 프로젝트 문서
+- **프로젝트 노션 페이지**
+  👉 [Notion 링크](https://www.notion.so/RFP-RAG-26a7f7b0bee7808e86c9f1b3f9211aa1)
+
+- **최종 보고서 (PDF)**
+  👉 [`docs/final_report.pdf`](docs/final_report.pdf) --> 완료 후 수정 필요
+
+- **발표 자료 (PPT)**
+  👉 [발표 자료 다운로드](https://your-ppt-link) --> 완료 후 수정 필요
