@@ -48,7 +48,7 @@ with st.sidebar:
                 elif isinstance(msg, AIMessage):
                     st.session_state.messages.append({
                         "role": "assistant", "answer": msg.content,
-                        "inference_time": None, "context_docs": None
+                        "inference_time": None
                     })
             st.success(f"'{st.session_state.user_id}'님, 안녕하세요! 이전 대화 기록을 불러왔습니다.")
         else:
@@ -101,8 +101,7 @@ else:
         new_message = {
             "role": "assistant",
             "answer": response["answer"],
-            "inference_time": response.get("inference_time"),
-            "context_docs": response.get("context_docs")
+            "inference_time": response.get("inference_time")
         }
         st.session_state.messages.append(new_message)
 
