@@ -147,7 +147,7 @@ class ChainRouter:
         )
 
         llm_route_chain = route_prompt | self.llm | StrOutputParser()
-        
+
         # 3단계: 각 의도에 맞는 전문화된 체인 정의
         metadata_search_chain = self._create_metadata_search_chain()
         summarization_chain = self._create_summarization_chain()
@@ -158,7 +158,7 @@ class ChainRouter:
         # 전체 파이프라인 결합 - 안정적인 데이터 흐름 보장
         def log_and_pass_through(data):
             classification = data.get('classification', 'N/A')
-            
+
             # 문자열 또는 dict 처리
             if isinstance(classification, dict):
                 classification_str = classification.get('classification', 'N/A')
@@ -199,7 +199,6 @@ class ChainRouter:
         ).with_config({"callbacks": [self.tracer]})
         
         return full_chain
-        
 
 
     def _create_metadata_search_chain(self):
@@ -233,7 +232,7 @@ class ChainRouter:
             RunnablePassthrough.assign(context=RunnableLambda(lambda x:get_context(self.get_hybrid_retrieved_documents(x))))
             | prompt | self.llm | StrOutputParser()
         )
-        
+
 
     def _create_default_qa_chain(self):
         """## RFP 관련 기본 QA 체인 (Route 2, Fallback Route) - 메타데이터 참조 """
@@ -287,7 +286,6 @@ class ChainRouter:
             | self.llm
             | StrOutputParser()
         )
-
 
 
     def _create_summarization_chain(self):
@@ -348,13 +346,13 @@ class ChainRouter:
             "--- 끝 ---\n\n"
             "최종 사업 요약 브리핑:")
         ])
-        
+
         # RunnablePassthrough.assign을 사용하여 파이프라인 전반에 걸쳐 'input', 'history' 등의
         # 원본 데이터를 유지하면서 새로운 키('docs', 'summaries', 'context')를 추가하는 방식
-        
+
         # 1. 문서 검색 결과를 'docs' 키에 할당 (원본 데이터 유지)
         summarization_pipeline = RunnablePassthrough.assign(docs=get_documents)
-        
+
         # 2. 'docs'에 대해 map_chain을 실행하고, 결과를 'summaries' 키에 할당
         summarization_pipeline = summarization_pipeline.assign(
             summaries=lambda x: map_chain.map().invoke(x['docs'])
@@ -374,7 +372,7 @@ class ChainRouter:
 
         return summarization_pipeline | reduce_prompt | self.llm | StrOutputParser()
 
-    
+
     def _create_comparison_chain(self):
         """## 비교 분석 체인 (단일/다중 문서 처리) (Route 4)"""
         # 1단계: 비교 유형 분류 및 정보 추출(Triage) 체인
@@ -490,7 +488,6 @@ class ChainRouter:
         )
         
         query_expansion_chain = query_expansion_prompt | self.llm | StrOutputParser()
-
         
         def format_docs(docs: List[Document]) -> str:
             # 검색 결과가 없을 경우를 대비한 방어 코드
@@ -502,7 +499,7 @@ class ChainRouter:
                 f"요약:\n{doc.metadata.get('summary', doc.page_content)}"
                 for doc in docs
             )
-            
+
         # Reduce 단계 (Recommendation)
         recommendation_prompt = ChatPromptTemplate.from_messages([
             ("system",
@@ -526,13 +523,13 @@ class ChainRouter:
              "**검색된 유사 사업 목록:**\n{context}\n\n"
              "**추천 목록 (위 지침에 따라 작성):**")
         ])
-        
+
         recommendation_pipeline = RunnablePassthrough.assign(
             expanded_query=query_expansion_chain # 'input'을 받아 'expanded_query' 생성
         ).assign(
             # 생성된 'expanded_query'를 사용해 MMR 검색 후 'context' 생성
             context=lambda x: format_docs(self.get_hybrid_retrieved_documents(x))
         )
-        
+
         # 최종적으로 'input', 'history', 'expanded_query', 'context'가 모두 포함된 딕셔너리가 recommendation_prompt로 전달.
         return recommendation_pipeline | recommendation_prompt | self.llm | StrOutputParser()
