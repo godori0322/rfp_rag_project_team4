@@ -63,7 +63,7 @@ class Chatbot:
     def create_default_retriever(self):
         base_retriever = self.vectorstore.as_retriever(
             search_type="mmr",
-            search_kwargs={"k": Config.FIRST_TOP_K, "fetch_k": Config.FETCH_K, "lambda_mult": Config.LAMBDA_MULT}  
+            search_kwargs={"k": Config.TOP_N, "fetch_k": Config.FETCH_K, "lambda_mult": Config.LAMBDA_MULT}
         )
         reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)
         compressor = CrossEncoderReranker(model=reranker_model, top_n=Config.TOP_K)
@@ -98,7 +98,7 @@ class Chatbot:
                 AttributeInfo(name="summary", type="string", description="사업 요약"),
                 AttributeInfo(name="filename", type="string", description="파일명")
             ],
-            search_kwargs={"k": Config.FIRST_TOP_K},
+            search_kwargs={"k": Config.TOP_N},
             verbose=True
         )
         reranker_model = HuggingFaceCrossEncoder(model_name=Config.RERANK_MODEL)

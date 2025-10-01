@@ -24,7 +24,7 @@ class Config:
     # RAG 파라미터
     CHUNK_SIZE = 1000
     CHUNK_OVERLAP = 100
-    FIRST_TOP_K = 7
+    TOP_N = 7
     TOP_K = 3
     FETCH_K = 20
     LAMBDA_MULT = 0.5
