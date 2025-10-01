@@ -12,9 +12,9 @@
 
 ## 🎥 데모 영상
 
-<video src="data/app_screenrecording.mp4" width="700" controls>
-  브라우저가 video 태그를 지원하지 않습니다.
-</video>
+아래 이미지를 클릭하면 실행 화면 영상을 볼 수 있습니다.
+
+[![App Demo](data/image/app_screenshot.png)](data/app_screenrecording.mp4)
 
 ## 🔄 프로젝트 RAG 흐름 다이어그램
 
