@@ -148,8 +148,8 @@ python src/evaluation.py
 - **프로젝트 노션 페이지**
   👉 [Notion 링크](https://www.notion.so/RFP-RAG-26a7f7b0bee7808e86c9f1b3f9211aa1)
 
-- **최종 보고서**
+- **최종 내용 정리**
   👉 [Notion 링크](https://www.notion.so/GPT-27e7f7b0bee780d7b8a2c6a63b24b889)
 
-- **발표 자료 (PPT)**
-  👉 [발표 자료 다운로드](https://your-ppt-link) --> 완료 후 수정 필요
+- **발표 자료**
+  👉 [발표 자료 다운로드](data/4팀_중급프로젝트_보고서.pdf)
