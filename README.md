@@ -10,6 +10,12 @@
 
 <p align="center"><img src="data/image/app_screenshot.png" alt="입찰메이트 브라우저 앱 실행 화면"/></p>
 
+## 🎥 데모 영상
+
+아래 이미지를 클릭하면 실행 화면 영상을 볼 수 있습니다.
+
+[![App Demo](data/image/app_screenshot.png)](data/app_screenrecording.mp4)
+
 ## 🔄 프로젝트 RAG 흐름 다이어그램
 
 RFP 문서 기반 RAG 시스템의 전체 동작 과정을 시각적으로 표현한 다이어그램입니다.  
@@ -142,8 +148,8 @@ python src/evaluation.py
 - **프로젝트 노션 페이지**
   👉 [Notion 링크](https://www.notion.so/RFP-RAG-26a7f7b0bee7808e86c9f1b3f9211aa1)
 
-- **최종 보고서**
+- **최종 내용 정리**
   👉 [Notion 링크](https://www.notion.so/GPT-27e7f7b0bee780d7b8a2c6a63b24b889)
 
-- **발표 자료 (PPT)**
-  👉 [발표 자료 다운로드](https://your-ppt-link) --> 완료 후 수정 필요
+- **최종 보고서**
+  👉 [발표 자료 다운로드](data/Team4_Project2_Report.pdf)
