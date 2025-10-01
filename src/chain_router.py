@@ -33,12 +33,6 @@ class ChainRouter:
     def find_contexts(self, docs):
         return [(doc.page_content + '\n' + json.dumps(doc.metadata, ensure_ascii=False)) for doc in docs]
 
-    def _create_conversation_summary_chain(self):
-        prompt = ChatPromptTemplate.from_messages([
-            MessagesPlaceholder("history"),
-            ("user", "지금까지의 대화 내용을 바탕으로, 우리가 현재 어떤 주제에 대해 이야기하고 있는지 한 문장으로 요약해줘.")
-        ])
-        return prompt | self.llm | StrOutputParser()
 
     def get_recent_history(self, history, window_size=10):
         return history[-window_size:] if history else []
@@ -73,7 +67,8 @@ class ChainRouter:
         for doc in combined_docs:
             unique_docs[doc.page_content] = doc
         
-        final_docs = list(unique_docs.values())
+        dedup_docs = list(unique_docs.values())
+        final_docs = sorted(dedup_docs, key=lambda d: d.metadata.get('score', 0), reverse=True)[:5]
         print(f"--- INFO (Hybrid Retrieval): 총 {len(combined_docs)}개 문서를 검색, 중복 제거 후 {len(final_docs)}개 문서 확보 ---")
         
         return final_docs
@@ -90,7 +85,6 @@ class ChainRouter:
 
     def create_router_chain(self):
         # 라우터 프롬프트: 쿼리 의도 분류
-        conversation_summary_chain = self._create_conversation_summary_chain()
         rephrasing_chain = self._create_rephrasing_chain()
         route_prompt = ChatPromptTemplate.from_template(
             """당신은 사용자의 질문 의도를 정확하게 분석하여 5개의 카테고리 중 하나로 분류하는 전문가입니다.
@@ -190,7 +184,6 @@ class ChainRouter:
             RunnablePassthrough.assign(
                 history=lambda x: self.get_recent_history(x.get("history", []))  # 답변단계에서만 쓰기 위해 유지
             )
-            .assign(conversation_summary=conversation_summary_chain)
             .assign(rephrased_question=rephrasing_chain)
             .assign(deterministic_classification=lambda x: self._deterministic_router(x))  # 결정론적 라우팅 추가
             # retriever에는 원문 input 그대로 사용
