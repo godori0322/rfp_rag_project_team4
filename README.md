@@ -16,7 +16,7 @@ RFP 문서 기반 RAG 시스템의 전체 동작 과정을 시각적으로 표�
 하이브리드 리트리버(Hybrid Retriever)는 **Original Search**와 **Rephrasing Search**를 결합하여 더 정교한 검색 결과를 제공합니다.
 두 검색 결과를 앙상블하여 최종 후보 문맥을 생성하고, 이를 LLM에 전달하여 답변을 생성합니다.
 
-<img src="data/image/hybrid_retriever.webp" alt="Hybrid Retriever Diagram" />
+<p align="center"><img src="data/image/hybrid_retriever.webp" alt="Hybrid Retriever Diagram" /></p>
 
 ## 🚀 주요 기술 스택
 
