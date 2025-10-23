@@ -46,6 +46,7 @@ matplotlib==3.10.6
 # Paddle OCR
 paddlepaddle
 paddleocr
+paddlex[ocr]
 pdf2image
 # sudo apt update
 # sudo apt install poppler-utils
