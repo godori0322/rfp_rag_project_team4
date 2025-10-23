@@ -3,7 +3,7 @@
 from paddleocr import PaddleOCRVL
 
 # --- 1. 파이프라인 초기화 ---
-pipeline = PaddleOCRVL()
+pipeline = PaddleOCRVL(device="gpu")
 
 # --- 2. 입력 PDF 파일 경로 설정 ---
 pdf_file_path = "data/pdf/고려대학교_차세대 포털·학사 정보시스템 구축사업.pdf"
