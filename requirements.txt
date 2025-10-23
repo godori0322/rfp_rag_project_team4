@@ -44,7 +44,7 @@ networkx==3.4.2
 matplotlib==3.10.6
 
 # Paddle OCR
-paddlepaddle
+paddlepaddle-gpu # paddlepaddle is used for CPU
 paddleocr
 paddlex[ocr]
 pdf2image

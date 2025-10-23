@@ -2,6 +2,12 @@
 
 from paddleocr import PaddleOCRVL
 
+import paddle
+print(paddle.__version__)
+print(paddle.device.is_compiled_with_cuda())  # True여야 GPU 사용 가능
+print(paddle.device.get_device())             # 'gpu:0' 등으로 나와야 정상
+
+
 # --- 1. 파이프라인 초기화 ---
 pipeline = PaddleOCRVL(device="gpu")
 
