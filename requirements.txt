@@ -21,9 +21,9 @@ lark==1.2.2
 
 # 임베딩 & 모델 활용 
 transformers==4.56.1
-torch
-torchvision
-torchaudio
+torch==2.8.0
+torchvision==0.23.0
+torchaudio==2.8.0
 sentence-transformers==5.1.0
 
 # 검증
@@ -42,12 +42,3 @@ streamlit==1.50.0
 lark==1.2.2
 networkx==3.4.2
 matplotlib==3.10.6
-
-# Paddle OCR
-# paddlepaddle-gpu # paddlepaddle is used for CPU
-# paddleocr
-# paddlex[ocr]
-# pdf2image
-# sudo apt update
-# sudo apt install poppler-utils
-
