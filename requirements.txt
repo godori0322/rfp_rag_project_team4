@@ -43,14 +43,14 @@ lark==1.2.2
 networkx==3.4.2
 matplotlib==3.10.6
 
+# safetensors (nightly wheel URL 직접 지정)
+https://paddle-whl.bj.bcebos.com/nightly/cu126/safetensors/safetensors-0.6.2.dev0-cp38-abi3-linux_x86_64.whl
+
 # PaddlePaddle GPU 3.2.0 (CUDA 12.6 빌드)
 paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 
 # PaddleOCR + 문서 파서 확장
 paddleocr[doc-parser]
-
-# safetensors (nightly wheel URL 직접 지정)
-https://paddle-whl.bj.bcebos.com/nightly/cu126/safetensors/safetensors-0.6.2.dev0-cp38-abi3-linux_x86_64.whl
 
 
 # Paddle OCR
