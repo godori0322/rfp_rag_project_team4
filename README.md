@@ -70,6 +70,8 @@ RFP 문서 기반 RAG 시스템의 전체 동작 과정을 시각적으로 표�
 2.  **의존성 설치:**
     ```bash
     pip install -r requirements.txt
+    chmod +x install.sh
+    ./install.sh
     ```
 
 3.  **환경 변수 설정:**

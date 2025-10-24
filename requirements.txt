@@ -21,9 +21,9 @@ lark==1.2.2
 
 # 임베딩 & 모델 활용 
 transformers==4.56.1
-torch==2.8.0
-torchvision==0.23.0
-torchaudio==2.8.0
+torch
+torchvision
+torchaudio
 sentence-transformers==5.1.0
 
 # 검증
